@@ -58,7 +58,7 @@ def get_main_args():
 
 def my_data_loader(main_path):
     img_pathes = [os.path.join(main_path, img) for img in os.listdir(main_path)]
-    data = []
+    img_pathes = sorted(img_pathes)
     preproc=dataset.ValTransform(
             rgb_means=(0.485, 0.456, 0.406),
             std=(0.229, 0.224, 0.225),
