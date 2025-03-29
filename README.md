@@ -110,6 +110,36 @@ python external/TrackEval/scripts/run_mot_challenge.py   --SPLIT_TO_EVAL val   -
 python external/TrackEval/scripts/run_mot_challenge.py   --SPLIT_TO_EVAL val   --GT_FOLDER results/gt/   --TRACKERS_FOLDER results/trackers/   --BENCHMARK MOT20  --TRACKERS_TO_EVAL BTPP_post_gbi
 ```
 
+## Modifications in this Fork
+This fork includes the following enhancements:
+1. Integrated the YOLO model from [Ultralytics](https://github.com/ultralytics/ultralytics) with the tracker, making the framework more flexible for testing with different detection models.  
+   To run the YOLO-integrated tracker, use the following command:
+   ```shell
+   python run_with_yolo.py \
+       --dataset {dataset_name} \
+       --exp_name BTPP \
+       --result_folder {output_folder} \
+       --frame_rate {frame_rate} \
+       --reid_path {reid_path} \
+       --dataset_path {dataset_path} \
+       --yolo_path {yolo_path}
+   ```
+2. Added support for ensembling two models to improve tracking performance and robustness.  
+   To run the model ensembling tracker, use the following command:
+   ```shell
+   python run_with_ensembler.py \
+       --dataset {dataset_name} \
+       --exp_name BTPP \
+       --result_folder {output_folder} \
+       --frame_rate {frame_rate} \
+       --reid_path {reid_path} \
+       --dataset_path {dataset_path} \
+       --model1_path {model1_path} \
+       --model1_weight {model1_weight} \
+       --model2_path {model2_path} \
+       --model2_weight {model2_weight}
+   ```
+
 # Acknowledgements
 Our implementation is developed on top of publicly available codes. We thank authors of [Deep OC-SORT](https://github.com/GerardMaggiolino/Deep-OC-SORT/), [SORT](https://github.com/abewley/sort), [StrongSort](https://github.com/dyhBUPT/StrongSORT), [NCT](https://github.com/Autoyou/Noise-control-multi-object-tracking), [ByteTrack](https://github.com/ifzhang/ByteTrack/) for making their code available. 
 
