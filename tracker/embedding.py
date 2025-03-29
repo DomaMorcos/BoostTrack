@@ -8,6 +8,7 @@ import cv2
 import torchvision
 import torchreid
 import numpy as np
+import torch.nn as nn
 
 from external.adaptors.fastreid_adaptor import FastReID
 
@@ -16,9 +17,30 @@ Implementation from Deep OC-SORT:
 https://github.com/GerardMaggiolino/Deep-OC-SORT/
 """
 
+class OSNetReID(nn.Module):
+    def __init__(self, embedding_dim=256):
+        super(OSNetReID, self).__init__()
+        self.model = torchreid.models.build_model(
+            name='osnet_ain_x1_0',
+            num_classes=1000,
+            pretrained=True
+        )
+        self.model.classifier = nn.Identity()
+
+        for name, param in self.model.named_parameters():
+            if 'conv4' not in name:
+                param.requires_grad = False
+
+        self.fc = nn.Linear(512, embedding_dim)
+
+    def forward(self, x):
+        x = self.model(x)
+        x = self.fc(x)
+        return nn.functional.normalize(x, p=2, dim=1)
+
 
 class EmbeddingComputer:
-    def __init__(self, dataset, test_dataset, grid_off, max_batch=1024):
+    def __init__(self, dataset, test_dataset, grid_off, max_batch=1024, reid_path=None):
         self.model = None
         self.dataset = dataset
         self.test_dataset = test_dataset
@@ -29,6 +51,7 @@ class EmbeddingComputer:
         self.cache_name = ""
         self.grid_off = grid_off
         self.max_batch = max_batch
+        self.reid_path = reid_path
 
         # Only used for the general ReID model (not FastReID)
         self.normalize = False
@@ -176,7 +199,8 @@ class EmbeddingComputer:
         elif self.dataset == "dance":
             path = "external/weights/dance_sbs_S50.pth"
         else:
-            raise RuntimeError("Need the path for a new ReID model.")
+            # raise RuntimeError("Need the path for a new ReID model.")
+            return self._get_general_model()
 
         model = FastReID(path)
         model.eval()
@@ -191,14 +215,17 @@ class EmbeddingComputer:
         evaluate on as well. Instead we use a different model for
         validation.
         """
-        model = torchreid.models.build_model(name="osnet_ain_x1_0", num_classes=2510, loss="softmax", pretrained=False)
-        sd = torch.load("external/weights/osnet_ain_ms_d_c.pth.tar")["state_dict"]
-        new_state_dict = OrderedDict()
-        for k, v in sd.items():
-            name = k[7:]  # remove `module.`
-            new_state_dict[name] = v
-        # load params
-        model.load_state_dict(new_state_dict)
+        # model = torchreid.models.build_model(name="osnet_ain_x1_0", num_classes=2510, loss="softmax", pretrained=False)
+        # sd = torch.load("external/weights/osnet_ain_ms_d_c.pth.tar")["state_dict"]
+        # new_state_dict = OrderedDict()
+        # for k, v in sd.items():
+        #     name = k[7:]  # remove `module.`
+        #     new_state_dict[name] = v
+        # # load params
+        # model.load_state_dict(new_state_dict)
+        model = OSNetReID(256).to('cuda:0')
+        model.load_state_dict(torch.load(self.reid_path))
+        # model.load_state_dict(torch.load('best_reid_map.pth'))
         model.eval()
         model.cuda()
         self.model = model

@@ -32,7 +32,8 @@ class GeneralSettings:
         'dataset': 'mot17',
         'test_dataset': False,
         'min_box_area': 10,
-        'aspect_ratio_thresh': 1.6
+        'aspect_ratio_thresh': 1.6,
+        'reid_path': ""
     }
 
     dataset_specific_settings: Dict[str, Dict[str, Union[float, bool, int]]] = {

@@ -147,7 +147,7 @@ class BoostTrack(object):
         self.use_vt = BoostTrackPlusPlusSettings['use_vt']
 
         if GeneralSettings['use_embedding']:
-            self.embedder = EmbeddingComputer(GeneralSettings['dataset'], GeneralSettings['test_dataset'], True)
+            self.embedder = EmbeddingComputer(GeneralSettings['dataset'], GeneralSettings['test_dataset'], True, reid_path=GeneralSettings['reid_path'])
         else:
             self.embedder = None
 

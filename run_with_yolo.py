@@ -44,6 +44,7 @@ def get_main_args():
 
     parser.add_argument("--dataset_path", type=str, help="path to dataset")
     parser.add_argument("--yolo_path", type=str, help="path to yolo weights")
+    parser.add_argument("--reid_path", type=str, help="path to reid weights (osnet_ain_x1_0)")
 
     args = parser.parse_args()
     if args.dataset == "mot17":
@@ -90,6 +91,7 @@ def main():
     GeneralSettings.values['use_embedding'] = not args.no_reid
     GeneralSettings.values['use_ecc'] = not args.no_cmc
     GeneralSettings.values['test_dataset'] = args.test_dataset
+    GeneralSettings.values['reid_path'] = args.reid_path
 
     BoostTrackSettings.values['s_sim_corr'] = args.s_sim_corr
 
