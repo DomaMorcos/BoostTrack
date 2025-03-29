@@ -14,7 +14,7 @@ import cv2
 import numpy as np
 import torch
 
-
+from detectors import YoloDetector
 """
 Script modified from Deep OC-SORT: 
 https://github.com/GerardMaggiolino/Deep-OC-SORT
@@ -71,19 +71,6 @@ def my_data_loader(main_path):
         height, width, _ = np_img.shape
         img, target  = preproc(np_img, None, (height, width))
         yield ((img.reshape(1, *img.shape), np_img), target, (height, width, torch.tensor(idx), None, ["test"]), None)
-
-class YoloDetector:
-    def __init__(self, yolo_path):
-        self.model = YOLO(yolo_path)
-
-    def __call__(self, img):
-        results = self.model(img)[0]
-        annotations = []
-        for box in results.boxes:
-            x = list(map(float, box.xyxy[0]))
-            x.append(box.conf[0].item())
-            annotations.append(x)
-        return torch.tensor(annotations)
 
 def main():
     # Set dataset and detector
