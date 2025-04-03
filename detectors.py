@@ -59,10 +59,10 @@ class FasterRCNNDetector:
             rpn_anchor_generator=anchor_generator,
             rpn_pre_nms_top_n_test=3000,
             rpn_post_nms_top_n_test=300,
-            rpn_nms_thresh=0.7,
+            rpn_nms_thresh=0.65,
             box_score_thresh=0.05,
             box_nms_thresh=0.5,
-            box_detections_per_img=300
+            box_detections_per_img=500
         )
         
         in_features = self.model.roi_heads.box_predictor.cls_score.in_features
