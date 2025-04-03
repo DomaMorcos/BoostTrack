@@ -31,31 +31,45 @@ class YoloDetector(Detector):
         return torch.tensor(annotations)
     
 
-class FasterRCNNDetector(Detector):
-    def __init__(self, model_path, confidence_threshold=0.3):
-        anchor_sizes = ((8,), (16,), (32,), (64,), (128,))
+# Faster R-CNN Detector (removed conf_threshold)
+class FasterRCNNDetector:
+    def __init__(self, model_path):
+        anchor_sizes = tuple((int(w),) for w, _ in [(8, 8), (16, 16), (32, 32), (64, 64), (128, 128)])
         aspect_ratios = ((0.5, 1.0, 2.0),) * len(anchor_sizes)
-        anchor_generator = torchvision.models.detection.rpn.AnchorGenerator(
+        anchor_generator = AnchorGenerator(
             sizes=anchor_sizes,
             aspect_ratios=aspect_ratios
         )
-        self.model = fasterrcnn_resnet50_fpn(
-            weights=None,
+        
+        backbone = torchvision.models.detection.backbone_utils.resnet_fpn_backbone(
+            backbone_name='resnet101',
+            pretrained=False,
+            trainable_layers=3
+        )
+        self.model = FasterRCNN(
+            backbone,
+            num_classes=2,
             rpn_anchor_generator=anchor_generator,
-            rpn_pre_nms_top_n_test=3000,
+            rpn_pre_nms_top_n_test=1000,
             rpn_post_nms_top_n_test=300,
-            rpn_nms_thresh=0.75,
+            rpn_nms_thresh=0.7,
+            box_score_thresh=0.05,
+            box_nms_thresh=0.5,
             box_detections_per_img=300
         )
+        
         in_features = self.model.roi_heads.box_predictor.cls_score.in_features
         self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes=2)
-        self.model.load_state_dict(torch.load(model_path))
+        
+        checkpoint = torch.load(model_path)
+        self.model.load_state_dict(checkpoint['model'])
+        
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model.to(self.device)
         self.model.eval()
-        self.confidence_threshold = confidence_threshold
         self.transforms = A.Compose([
             A.Resize(height=640, width=640, always_apply=True),
+            A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
             ToTensorV2()
         ])
 
@@ -64,16 +78,18 @@ class FasterRCNNDetector(Detector):
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         augmented = self.transforms(image=img_rgb)
         img_tensor = augmented['image'].to(self.device)
-        img_tensor = img_tensor.float() / 255.0
         img_tensor = img_tensor.unsqueeze(0)
+        
         with torch.no_grad():
             predictions = self.model(img_tensor)[0]
+        
         boxes = predictions['boxes'].cpu()
         scores = predictions['scores'].cpu()
         labels = predictions['labels'].cpu()
-        mask = (labels == 1) & (scores >= self.confidence_threshold)
+        mask = (labels == 1)  # Only filter by class (pedestrian), no confidence threshold
         boxes = boxes[mask]
         scores = scores[mask]
+        
         if len(boxes) > 0:
             scale_x = orig_w / 640
             scale_y = orig_h / 640
@@ -84,6 +100,7 @@ class FasterRCNNDetector(Detector):
             annotations = torch.cat((boxes, scores.unsqueeze(1)), dim=1)
         else:
             annotations = torch.zeros((0, 5))
+        
         return annotations
 
 class EnsembleDetector(Detector):
