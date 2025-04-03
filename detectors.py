@@ -59,7 +59,7 @@ class FasterRCNNDetector:
             rpn_anchor_generator=anchor_generator,
             rpn_pre_nms_top_n_test=3000,
             rpn_post_nms_top_n_test=300,
-            rpn_nms_thresh=0.61,
+            rpn_nms_thresh=0.75,
             box_score_thresh=0.05,
             box_nms_thresh=0.5,
             box_detections_per_img=300
