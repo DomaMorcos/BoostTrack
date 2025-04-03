@@ -10,6 +10,13 @@ import cv2
 from ensemble_boxes import weighted_boxes_fusion 
 
 
+
+from torchvision.models.detection import FasterRCNN
+from torchvision.models.detection.rpn import AnchorGenerator
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+
+
+
 from abc import ABC, abstractmethod
 
 class Detector(ABC):
