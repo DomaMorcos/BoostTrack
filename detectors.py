@@ -29,13 +29,15 @@ class YoloDetector(Detector):
         self.model = YOLO(yolo_path)
 
     def __call__(self, img):
-        results = self.model(img)[0]
+        # Ensure img is in correct format (e.g., NumPy BGR or RGB)
+        results = self.model(img)[0]  # Single image inference
         annotations = []
         for box in results.boxes:
-            x = list(map(float, box.xyxy[0]))
-            x.append(box.conf[0].item())
-            annotations.append(x)
-        return torch.tensor(annotations)
+            xyxy = box.xyxy[0].tolist()  # [x_min, y_min, x_max, y_max] as list
+            conf = box.conf[0].item()    # Confidence as scalar
+            annotations.append(xyxy + [conf])  # [x_min, y_min, x_max, y_max, conf]
+        # Return tensor of shape (N, 5) or (0, 5) if no detections
+        return torch.tensor(annotations) if annotations else torch.zeros((0, 5), dtype=torch.float32)
     
 
 # Faster R-CNN Detector (removed conf_threshold)
