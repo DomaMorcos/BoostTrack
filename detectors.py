@@ -29,15 +29,15 @@ class YoloDetector(Detector):
         self.model = YOLO(yolo_path)
 
     def __call__(self, img):
-        # Ensure img is in correct format (e.g., NumPy BGR or RGB)
-        results = self.model(img)[0]  # Single image inference
+        results = self.model(img)[0]  # Let Ultralytics scale to input resolution
         annotations = []
         for box in results.boxes:
-            xyxy = box.xyxy[0].tolist()  # [x_min, y_min, x_max, y_max] as list
-            conf = box.conf[0].item()    # Confidence as scalar
-            annotations.append(xyxy + [conf])  # [x_min, y_min, x_max, y_max, conf]
-        # Return tensor of shape (N, 5) or (0, 5) if no detections
-        return torch.tensor(annotations) if annotations else torch.zeros((0, 5), dtype=torch.float32)
+            xyxy = box.xyxy[0].tolist()  # [x_min, y_min, x_max, y_max] in original resolution
+            conf = box.conf[0].item()
+            annotations.append(xyxy + [conf])
+        return torch.tensor(annotations, dtype=torch.float32) if annotations else torch.zeros((0, 5), dtype=torch.float32)
+
+# EnsembleDetector remains unchanged as it assumes original resolution inputs
     
 
 # Faster R-CNN Detector (removed conf_threshold)
@@ -112,6 +112,10 @@ class FasterRCNNDetector:
         
         return annotations
 
+from ensemble_boxes import weighted_boxes_fusion
+import numpy as np
+import torch
+
 class EnsembleDetector(Detector):
     def __init__(self, model1: Detector, model2: Detector, model1_weight=0.7, model2_weight=0.3, iou_thresh=0.6):
         self.model1 = model1
@@ -123,11 +127,11 @@ class EnsembleDetector(Detector):
     def __call__(self, img):
         orig_h, orig_w = img.shape[:2]
 
-        # Get predictions from both detectors
-        model1_preds = self.model1(img)  # Already in original resolution
+        # Get predictions from both detectors (in original resolution)
+        model1_preds = self.model1(img)
         model2_preds = self.model2(img)
 
-        # Prepare for WBF (convert to [x1, y1, x2, y2, conf] format, normalized to [0, 1])
+        # Prepare for WBF (normalize to [0, 1])
         if len(model1_preds) > 0:
             yolo_boxes = model1_preds[:, :4].numpy()
             yolo_scores = model1_preds[:, 4].numpy()
@@ -137,20 +141,19 @@ class EnsembleDetector(Detector):
             yolo_scores = np.array([])
 
         if len(model2_preds) > 0:
-            faster_boxes = model2_preds[:, :4].numpy()
-            faster_scores = model2_preds[:, 4].numpy()
-            faster_boxes_normalized = faster_boxes / np.array([orig_w, orig_h, orig_w, orig_h])
+            other_boxes = model2_preds[:, :4].numpy()
+            other_scores = model2_preds[:, 4].numpy()
+            other_boxes_normalized = other_boxes / np.array([orig_w, orig_h, orig_w, orig_h])
         else:
-            faster_boxes_normalized = np.array([])
-            faster_scores = np.array([])
+            other_boxes_normalized = np.array([])
+            other_scores = np.array([])
 
         # Weighted Box Fusion
-        boxes_list = [yolo_boxes_normalized, faster_boxes_normalized]
-        scores_list = [yolo_scores, faster_scores]
-        labels_list = [np.ones(len(yolo_scores)), np.ones(len(faster_scores))]  # All are "person" (label 1)
+        boxes_list = [yolo_boxes_normalized, other_boxes_normalized]
+        scores_list = [yolo_scores, other_scores]
+        labels_list = [np.ones(len(yolo_scores)), np.ones(len(other_scores))]  # All "person"
         weights = [self.model1_weight, self.model2_weight]
 
-        # Perform WBF
         boxes, scores, _ = weighted_boxes_fusion(
             boxes_list, scores_list, labels_list, weights=weights, iou_thr=self.iou_thresh, skip_box_thr=0.0
         )
@@ -160,6 +163,6 @@ class EnsembleDetector(Detector):
             boxes = boxes * np.array([orig_w, orig_h, orig_w, orig_h])
             annotations = torch.tensor(np.hstack((boxes, scores[:, np.newaxis])), dtype=torch.float32)
         else:
-            annotations = torch.zeros((0, 5))
+            annotations = torch.zeros((0, 5), dtype=torch.float32)
 
         return annotations
