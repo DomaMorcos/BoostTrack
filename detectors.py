@@ -112,22 +112,19 @@ class FasterRCNNDetector:
         
         return annotations
 
-from ensemble_boxes import weighted_boxes_fusion
-import numpy as np
-import torch
 
+
+# In detectors.py
 class EnsembleDetector(Detector):
-    def __init__(self, model1: Detector, model2: Detector, model1_weight=0.7, model2_weight=0.3, iou_thresh=0.5, soft_factor=0.1):
+    def __init__(self, model1: Detector, model2: Detector, model1_weight=0.6, model2_weight=0.4, iou_thresh=0.65):
         self.model1 = model1
         self.model2 = model2
         self.model1_weight = model1_weight
         self.model2_weight = model2_weight
-        self.iou_thresh = iou_thresh  # Lower IoU for softer fusion
-        self.soft_factor = soft_factor  # Controls softness (higher = more boxes kept)
+        self.iou_thresh = iou_thresh  # Tuned to 0.65 for precision
 
     def __call__(self, img):
         orig_h, orig_w = img.shape[:2]
-
         model1_preds = self.model1(img)
         model2_preds = self.model2(img)
 
@@ -147,7 +144,6 @@ class EnsembleDetector(Detector):
             boxes2_normalized = np.array([])
             scores2 = np.array([])
 
-        # Soft-WBF: Lower iou_thr and adjust skip_box_thr
         boxes_list = [boxes1_normalized, boxes2_normalized]
         scores_list = [scores1, scores2]
         labels_list = [np.ones(len(scores1)), np.ones(len(scores2))]
@@ -155,9 +151,7 @@ class EnsembleDetector(Detector):
 
         boxes, scores, _ = weighted_boxes_fusion(
             boxes_list, scores_list, labels_list, 
-            weights=weights, 
-            iou_thr=self.iou_thresh,  # e.g., 0.5 instead of 0.6
-            skip_box_thr=self.soft_factor  # e.g., 0.1 instead of 0.0
+            weights=weights, iou_thr=self.iou_thresh, skip_box_thr=0.0  # Back to strict WBF
         )
 
         if len(boxes) > 0:
