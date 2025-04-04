@@ -57,9 +57,9 @@ class FasterRCNNDetector:
             backbone,
             num_classes=2,
             rpn_anchor_generator=anchor_generator,
-            rpn_pre_nms_top_n_test=3000,
+            rpn_pre_nms_top_n_test=1000,
             rpn_post_nms_top_n_test=300,
-            rpn_nms_thresh=0.8,
+            rpn_nms_thresh=0.7,
             box_score_thresh=0.05,
             box_nms_thresh=0.5,
             box_detections_per_img=300
