@@ -61,7 +61,7 @@ class FasterRCNNDetector:
             rpn_post_nms_top_n_test=300,
             rpn_nms_thresh=0.67,
             box_score_thresh=0.085,
-            box_nms_thresh=0.48,
+            box_nms_thresh=0.51,
             box_detections_per_img=300
         )
         
