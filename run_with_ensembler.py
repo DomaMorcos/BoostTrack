@@ -101,7 +101,7 @@ def main():
 
     model1 = YoloDetector(args.model1_path)  # YOLOv12l
     model2 = YoloDetector(args.model2_path)  # YOLOv9e
-    det = EnsembleDetector(model1, model2, args.model1_weight, args.model2_weight)
+    det = EnsembleDetector(model1, model2, args.model1_weight, args.model2_weight, iou_thresh=0.5, soft_factor=0.1) 
     for (img, np_img), _ , info, _ in my_data_loader(args.dataset_path):
         frame_id = info[2].item()
         video_name = info[4][0].split("/")[0]
