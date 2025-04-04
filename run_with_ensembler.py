@@ -101,7 +101,7 @@ def main():
 
 # In run_with_ensembler.py, main() function
     model1 = YoloDetector(args.model1_path, conf_thresh=0.3)  # YOLOv12l
-    model2 = YoloDetector(args.model2_path, conf_thresh=0.3)  # YOLOv12x
+    model2 = YoloDetector(args.model2_path, conf_thresh=0.6)  # YOLOv12x
     det = EnsembleDetector(model1, model2, args.model1_weight, args.model2_weight, iou_thresh=0.6)
     for (img, np_img), _ , info, _ in my_data_loader(args.dataset_path):
         frame_id = info[2].item()
