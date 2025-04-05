@@ -32,9 +32,10 @@ class YoloDetector(Detector):
         results = self.model(img)[0]  # Let Ultralytics scale to input resolution
         annotations = []
         for box in results.boxes:
-            xyxy = box.xyxy[0].tolist()  # [x_min, y_min, x_max, y_max] in original resolution
-            conf = box.conf[0].item()
-            annotations.append(xyxy + [conf])
+            if int(box.cls) == 0:  # Only keep 'person' class (class ID 0)
+                xyxy = box.xyxy[0].tolist()  # [x_min, y_min, x_max, y_max]
+                conf = box.conf[0].item()
+                annotations.append(xyxy + [conf])
         return torch.tensor(annotations, dtype=torch.float32) if annotations else torch.zeros((0, 5), dtype=torch.float32)
 
 # EnsembleDetector remains unchanged as it assumes original resolution inputs
@@ -121,41 +122,50 @@ class EnsembleDetector(Detector):
         self.model2 = model2
         self.model1_weight = model1_weight
         self.model2_weight = model2_weight
-        self.iou_thresh = iou_thresh  # IoU threshold for WBF
+        self.iou_thresh = iou_thresh
 
     def __call__(self, img):
         orig_h, orig_w = img.shape[:2]
 
-        # Get predictions from both detectors (in original resolution)
-        model1_preds = self.model1(img)
+        # Get predictions
+        model1_preds = self.model1(img)  # Already filtered to 'person' in YoloDetector
         model2_preds = self.model2(img)
 
-        # Prepare for WBF (normalize to [0, 1])
+        # Prepare for WBF
         if len(model1_preds) > 0:
             yolo_boxes = model1_preds[:, :4].numpy()
             yolo_scores = model1_preds[:, 4].numpy()
             yolo_boxes_normalized = yolo_boxes / np.array([orig_w, orig_h, orig_w, orig_h])
+            yolo_labels = np.zeros(len(yolo_scores))  # Class 0 for 'person'
         else:
             yolo_boxes_normalized = np.array([])
             yolo_scores = np.array([])
+            yolo_labels = np.array([])
 
         if len(model2_preds) > 0:
             other_boxes = model2_preds[:, :4].numpy()
             other_scores = model2_preds[:, 4].numpy()
             other_boxes_normalized = other_boxes / np.array([orig_w, orig_h, orig_w, orig_h])
+            other_labels = np.zeros(len(other_scores))  # Class 0 for 'person'
         else:
             other_boxes_normalized = np.array([])
             other_scores = np.array([])
+            other_labels = np.array([])
 
         # Weighted Box Fusion
         boxes_list = [yolo_boxes_normalized, other_boxes_normalized]
         scores_list = [yolo_scores, other_scores]
-        labels_list = [np.ones(len(yolo_scores)), np.ones(len(other_scores))]  # All "person"
+        labels_list = [yolo_labels, other_labels]  # Use actual class labels
         weights = [self.model1_weight, self.model2_weight]
 
-        boxes, scores, _ = weighted_boxes_fusion(
+        boxes, scores, labels = weighted_boxes_fusion(
             boxes_list, scores_list, labels_list, weights=weights, iou_thr=self.iou_thresh, skip_box_thr=0.0
         )
+
+        # Filter to only 'person' (class 0) after WBF
+        person_mask = labels == 0
+        boxes = boxes[person_mask]
+        scores = scores[person_mask]
 
         # Scale back to original resolution
         if len(boxes) > 0:
