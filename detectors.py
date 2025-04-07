@@ -93,34 +93,55 @@ class FasterRCNNDetector(Detector):
 # RF-DETR Detector
 class RFDETRDetector(Detector):
     def __init__(self, model_path):
-        self.model = RFDETRBase(pretrain_weights=model_path)  # Load weights during init
+        self.model = RFDETRBase(pretrain_weights=model_path)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        
+        self.model.to(self.device)
+        self.model.eval()
 
     def __call__(self, img):
         orig_h, orig_w = img.shape[:2]
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         
-        # RF-DETR expects images in RGB format; no explicit resize/normalize needed here
+        # Run inference
         with torch.no_grad():
-            predictions = self.model.predict(img_rgb)  # Assuming predict takes a numpy array
+            predictions = self.model.predict(img_rgb)  # Assuming numpy array input
         
-        # Convert RF-DETR predictions to [x1, y1, x2, y2, conf] format
-        annotations = []
-        for pred in predictions:
-            if pred['label'] == 'person':  # Filter for 'person' class
-                box = pred['box']  # Assuming format [x1, y1, x2, y2]
-                conf = pred['confidence']
-                annotations.append(box + [conf])
+        # Handle different possible output formats
+        if isinstance(predictions, tuple):  # e.g., (boxes, scores, labels)
+            try:
+                boxes, scores, labels = predictions
+            except ValueError:
+                raise ValueError("RF-DETR predict() returned a tuple, but it doesn’t match (boxes, scores, labels)")
+            
+            # Convert to numpy if tensors
+            boxes = boxes.cpu().numpy() if torch.is_tensor(boxes) else boxes
+            scores = scores.cpu().numpy() if torch.is_tensor(scores) else scores
+            labels = labels.cpu().numpy() if torch.is_tensor(labels) else labels
+            
+            # Filter for 'person' (class ID 0 in COCO)
+            person_mask = labels == 0
+            boxes = boxes[person_mask]
+            scores = scores[person_mask]
+            
+            if len(boxes) > 0:
+                # Ensure boxes are in [x1, y1, x2, y2] format
+                annotations = np.hstack((boxes, scores[:, np.newaxis]))
+            else:
+                annotations = np.zeros((0, 5))
         
-        if annotations:
-            annotations = torch.tensor(annotations, dtype=torch.float32)
-            # Ensure boxes are scaled to original resolution if needed
-            # RF-DETR might already output in original scale; adjust if necessary
+        elif isinstance(predictions, list):  # e.g., list of (x1, y1, x2, y2, conf, label)
+            annotations = []
+            for pred in predictions:
+                if len(pred) >= 6 and pred[5] == 0:  # Assuming label is last element, 0 = 'person'
+                    box = pred[:4]  # [x1, y1, x2, y2]
+                    conf = pred[4]  # Confidence score
+                    annotations.append(list(box) + [conf])
+            annotations = np.array(annotations) if annotations else np.zeros((0, 5))
+        
         else:
-            annotations = torch.zeros((0, 5), dtype=torch.float32)
-        
-        return annotations
+            raise ValueError(f"Unexpected RF-DETR prediction format: {type(predictions)}")
+
+        return torch.tensor(annotations, dtype=torch.float32)
 
 # Ensemble Detector (adjusted to handle three models)
 class EnsembleDetector(Detector):
