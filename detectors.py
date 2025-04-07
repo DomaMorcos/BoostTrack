@@ -110,7 +110,7 @@ class RFDETRDetector(Detector):
             predictions = self.model.predict(self.temp_img_path)
         
         # Debug: Check predictions
-        print(f"RF-DETR predictions: {predictions}")
+        # print(f"RF-DETR predictions: {predictions}")
 
         # Check if predictions is a supervision.Detections object
         if isinstance(predictions, sv.Detections):
