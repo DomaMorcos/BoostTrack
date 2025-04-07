@@ -36,8 +36,8 @@ class OSNetReID(nn.Module):
 class EnsembleOSNetReID(nn.Module):
     def __init__(self, model1_path, model2_path, weight1=0.5, weight2=0.5, embedding_dim=256):
         super(EnsembleOSNetReID, self).__init__()
-        self.model1 = OSNetReID('osnet_ain_x1_0', embedding_dim)
-        self.model2 = OSNetReID('osnet_x1_0', embedding_dim)  # Using a different OSNet variant
+        self.model1 = OSNetReID()
+        self.model2 = OSNetReID()  
         self.weight1 = weight1
         self.weight2 = weight2
         
