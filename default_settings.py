@@ -73,8 +73,8 @@ class GeneralSettings:
 
 class BoostTrackSettings:
     values: Dict[str, Union[float, bool, int, str]] = {
-        'lambda_iou': 0.51,  # 0 to turn off
-        'lambda_mhd': 0.25,  # 0 to turn off
+        'lambda_iou': 0.5,  # 0 to turn off
+        'lambda_mhd': 0.23,  # 0 to turn off
         'lambda_shape': 0.25,  # 0 to turn off
         'use_dlo_boost': True,  # False to turn off
         'use_duo_boost': True,  # False to turn off
