@@ -34,8 +34,10 @@ def get_main_args():
     parser.add_argument("--reid_weight2", type=float, default=0.5)
     parser.add_argument("--frame_rate", type=int, default=25)
 
-    # Dynamically handle model paths and weights
     args, unknown = parser.parse_known_args()
+    print("Known args:", args)
+    print("Unknown args:", unknown)
+
     detectors_info = {}
     i = 1
     while True:
@@ -48,10 +50,11 @@ def get_main_args():
         if path_idx + 1 >= len(unknown) or (weight_idx >= 0 and weight_idx + 1 >= len(unknown)):
             break
         path = unknown[path_idx + 1]
-        weight = float(unknown[weight_idx + 1]) if weight_idx >= 0 else 1.0 / i  # Default weight if not specified
+        weight = float(unknown[weight_idx + 1]) if weight_idx >= 0 else 1.0 / i
         detectors_info[f"model{i}"] = {"path": path, "weight": weight}
         i += 1
     
+    print("Detectors info:", detectors_info)
     args.detectors_info = detectors_info
     if not detectors_info:
         raise ValueError("At least one model path must be provided (e.g., --model1_path)")
