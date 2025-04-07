@@ -20,7 +20,6 @@ class Detector(ABC):
     def __call__(self, img):
         pass
 
-# YOLO Detector (unchanged)
 class YoloDetector(Detector):
     def __init__(self, yolo_path):
         self.model = YOLO(yolo_path)
@@ -35,7 +34,6 @@ class YoloDetector(Detector):
                 annotations.append(xyxy + [conf])
         return torch.tensor(annotations, dtype=torch.float32) if annotations else torch.zeros((0, 5), dtype=torch.float32)
 
-# Faster R-CNN Detector (unchanged)
 class FasterRCNNDetector(Detector):
     def __init__(self, model_path):
         anchor_sizes = tuple((int(w),) for w, _ in [(8, 8), (16, 16), (32, 32), (64, 64), (128, 128)])
@@ -93,7 +91,6 @@ class FasterRCNNDetector(Detector):
         
         return annotations
 
-# RF-DETR Detector (updated to match official repo)
 class RFDETRDetector(Detector):
     def __init__(self, model_path):
         self.model = RFDETRBase(pretrain_weights=model_path)
@@ -108,7 +105,7 @@ class RFDETRDetector(Detector):
         pil_img = Image.fromarray(img_rgb)
         pil_img.save(self.temp_img_path)
         
-        # Run inference using official repo style
+        # Run inference
         with torch.no_grad():
             predictions = self.model.predict(self.temp_img_path)
         
@@ -122,14 +119,14 @@ class RFDETRDetector(Detector):
             scores = predictions.confidence  # [N] numpy array
             labels = predictions.class_id  # [N] numpy array
             
-            # Debug: Check raw outputs
-            print(f"RF-DETR boxes: {boxes}")
-            print(f"RF-DETR scores: {scores}")
-            print(f"RF-DETR labels: {labels}")
+            # # Debug: Check raw outputs
+            # print(f"RF-DETR boxes: {boxes}")
+            # print(f"RF-DETR scores: {scores}")
+            # print(f"RF-DETR labels: {labels}")
 
-            # Filter for 'person' (class ID 0)
+            # Filter for 'person' (class ID 1, based on your output)
             if labels is not None and len(labels) > 0:
-                person_mask = labels == 0
+                person_mask = labels == 1  # Changed from 0 to 1
                 boxes = boxes[person_mask]
                 scores = scores[person_mask]
             else:
@@ -151,7 +148,6 @@ class RFDETRDetector(Detector):
 
         return torch.tensor(annotations, dtype=torch.float32)
 
-# EnsembleDetector (unchanged)
 class EnsembleDetector(Detector):
     def __init__(self, model1, model2, model3, model1_weight=0.35, model2_weight=0.5, model3_weight=0.15, iou_thresh=0.6):
         self.model1 = model1
