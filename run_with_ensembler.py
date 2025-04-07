@@ -28,28 +28,23 @@ def get_main_args():
     parser.add_argument("--result_folder", type=str, default="results/trackers/")
     parser.add_argument("--test_dataset", action="store_true")
     parser.add_argument("--exp_name", type=str, default="test")
-    parser.add_argument("--no_reid", action="store_true", help="mark if visual embedding should NOT be used")
-    parser.add_argument("--no_cmc", action="store_true", help="mark if camera motion compensation should NOT be used")
-
-    parser.add_argument("--s_sim_corr", action="store_true", help="mark if you want to use corrected version of shape similarity calculation function")
-
-    parser.add_argument("--btpp_arg_iou_boost", action="store_true", help="BoostTrack++ arg. Mark if only IoU should be used for detection confidence boost.")
-    parser.add_argument("--btpp_arg_no_sb", action="store_true", help="BoostTrack++ arg. Mark if soft detection confidence boost should NOT be used.")
-    parser.add_argument("--btpp_arg_no_vt", action="store_true", help="BoostTrack++ arg. Mark if varying threhold should NOT be used for the detection confidence boost.")
-
-    parser.add_argument(
-        "--no_post",
-        action="store_true",
-        help="do not run post-processing.",
-    )
-
-    parser.add_argument("--dataset_path", type=str, help="path to dataset")
-    parser.add_argument("--model1_path", type=str, help="path to model1 weights")
-    parser.add_argument("--model1_weight", type=float, default=0.5, help="weight of model1 in ensembler")
-    parser.add_argument("--model2_path", type=str, help="path to model2 weights")
-    parser.add_argument("--model2_weight", type=float, default=0.5, help="weight of model2 in ensembler")
-    parser.add_argument("--reid_path", type=str, help="path to reid weights (osnet_ain_x1_0)")
-    parser.add_argument("--frame_rate", type=int, default=25, help="frame rate of the video")
+    parser.add_argument("--no_reid", action="store_true")
+    parser.add_argument("--no_cmc", action="store_true")
+    parser.add_argument("--s_sim_corr", action="store_true")
+    parser.add_argument("--btpp_arg_iou_boost", action="store_true")
+    parser.add_argument("--btpp_arg_no_sb", action="store_true")
+    parser.add_argument("--btpp_arg_no_vt", action="store_true")
+    parser.add_argument("--no_post", action="store_true")
+    parser.add_argument("--dataset_path", type=str)
+    parser.add_argument("--model1_path", type=str)
+    parser.add_argument("--model1_weight", type=float, default=0.5)
+    parser.add_argument("--model2_path", type=str)
+    parser.add_argument("--model2_weight", type=float, default=0.5)
+    parser.add_argument("--reid_path", type=str)
+    parser.add_argument("--reid_path2", type=str, default=None, help="path to second reid weights (optional)")
+    parser.add_argument("--reid_weight1", type=float, default=0.5, help="weight of first reid model")
+    parser.add_argument("--reid_weight2", type=float, default=0.5, help="weight of second reid model")
+    parser.add_argument("--frame_rate", type=int, default=25)
 
     args = parser.parse_args()
     if args.dataset == "mot17":
@@ -58,7 +53,7 @@ def get_main_args():
         args.result_folder = os.path.join(args.result_folder, "MOT20-val")
 
     if args.test_dataset:
-        args.result_folder.replace("-val", "-test")
+        args.result_folder = args.result_folder.replace("-val", "-test")
     return args
 
 
