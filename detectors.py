@@ -128,13 +128,16 @@ class RFDETRDetector(Detector):
         return annotations
 
 class EnsembleDetector(Detector):
-    def __init__(self, detectors: list, weights: list, iou_thresh=0.6, conf_thresh=0.3):
-        if len(detectors) != len(weights):
-            raise ValueError("Number of detectors must match number of weights")
-        if not detectors:
-            raise ValueError("At least one detector must be provided")
-        self.detectors = detectors
-        self.weights = weights
+    def __init__(self, model1_path, model2_path, model3_path, 
+                 model1_weight=0.35, model2_weight=0.5, model3_weight=0.15, 
+                 iou_thresh=0.6, conf_thresh=0.3):
+        # Hardcode Model 1 and 2 as YOLO, Model 3 as RF-DETR
+        self.detectors = [
+            YoloDetector(model1_path),  # Model 1: YOLO
+            YoloDetector(model2_path),  # Model 2: YOLO
+            RFDETRDetector(model3_path)  # Model 3: RF-DETR
+        ]
+        self.weights = [model1_weight, model2_weight, model3_weight]
         self.iou_thresh = iou_thresh
         self.conf_thresh = conf_thresh
 

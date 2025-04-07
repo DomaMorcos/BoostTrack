@@ -33,36 +33,15 @@ def get_main_args():
     parser.add_argument("--reid_weight1", type=float, default=0.5)
     parser.add_argument("--reid_weight2", type=float, default=0.5)
     parser.add_argument("--frame_rate", type=int, default=25)
+    # Hardcoded models
+    parser.add_argument("--model1_path", type=str, required=True)
+    parser.add_argument("--model1_weight", type=float, default=0.35)
+    parser.add_argument("--model2_path", type=str, required=True)
+    parser.add_argument("--model2_weight", type=float, default=0.5)
+    parser.add_argument("--model3_path", type=str, required=True)
+    parser.add_argument("--model3_weight", type=float, default=0.15)
 
-    args = parser.parse_args()  # Parse all args directly
-    print("Parsed args:", args)
-
-    detectors_info = {}
-    opts = args.opts if hasattr(args, 'opts') else []
-    i = 1
-    j = 0
-    while j < len(opts):
-        if opts[j] == f"--model{i}_path":
-            if j + 1 < len(opts):
-                path = opts[j + 1]
-                j += 2
-                # Look for weight
-                weight = 1.0 / i  # Default weight
-                if j < len(opts) and opts[j] == f"--model{i}_weight":
-                    if j + 1 < len(opts):
-                        weight = float(opts[j + 1])
-                        j += 2
-                detectors_info[f"model{i}"] = {"path": path, "weight": weight}
-                i += 1
-            else:
-                break
-        else:
-            j += 1
-
-    print("Detectors info:", detectors_info)
-    args.detectors_info = detectors_info
-    if not detectors_info:
-        raise ValueError("At least one model path must be provided (e.g., --model1_path)")
+    args = parser.parse_args()
 
     if args.dataset == "mot17":
         args.result_folder = os.path.join(args.result_folder, "MOT17-val")
@@ -96,26 +75,11 @@ def main():
     BoostTrackPlusPlusSettings.values['use_sb'] = not args.btpp_arg_no_sb
     BoostTrackPlusPlusSettings.values['use_vt'] = not args.btpp_arg_no_vt
 
-    # Initialize detectors dynamically
-    detectors = []
-    weights = []
-    for model_key, info in args.detectors_info.items():
-        model_path = info["path"]
-        weight = info["weight"]
-        # Determine detector type based on file extension or convention
-        if model_path.endswith('.pt'):  # Assuming YOLO models
-            detectors.append(YoloDetector(model_path))
-        elif 'rf-detr' in model_path.lower():  # Heuristic for RF-DETR
-            detectors.append(RFDETRDetector(model_path))
-        else:  # Default to Faster R-CNN or add more logic
-            detectors.append(FasterRCNNDetector(model_path))
-        weights.append(weight)
-    
-    # Normalize weights to sum to 1 (optional, depending on your preference)
-    total_weight = sum(weights)
-    weights = [w / total_weight for w in weights] if total_weight > 0 else weights
-
-    det = EnsembleDetector(detectors, weights)
+    # Initialize hardcoded ensemble
+    det = EnsembleDetector(
+        model1_path=args.model1_path, model2_path=args.model2_path, model3_path=args.model3_path,
+        model1_weight=args.model1_weight, model2_weight=args.model2_weight, model3_weight=args.model3_weight
+    )
 
     tracker = None
     results = {}
