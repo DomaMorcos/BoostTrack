@@ -10,6 +10,7 @@ import numpy as np
 import cv2
 from ensemble_boxes import weighted_boxes_fusion
 from rfdetr import RFDETRBase  # Import RF-DETR
+import supervision as sv
 from abc import ABC, abstractmethod
 
 class Detector(ABC):

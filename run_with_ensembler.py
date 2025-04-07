@@ -12,7 +12,7 @@ from ultralytics import YOLO
 import cv2
 import numpy as np
 import torch
-from detectors import YoloDetector, FasterRCNNDetector, RFDETRDetector, EnsembleDetector
+from detectors import YoloDetector, RFDETRDetector, EnsembleDetector
 
 def get_main_args():
     parser = make_parser()
@@ -33,9 +33,9 @@ def get_main_args():
     parser.add_argument("--reid_weight1", type=float, default=0.5)
     parser.add_argument("--reid_weight2", type=float, default=0.5)
     parser.add_argument("--frame_rate", type=int, default=25)
-    parser.add_argument("--model1_path", type=str, required=True)  # YOLO
+    parser.add_argument("--model1_path", type=str, required=True)  # YOLO 1
     parser.add_argument("--model1_weight", type=float, default=0.35)
-    parser.add_argument("--model2_path", type=str, required=True)  # Faster R-CNN
+    parser.add_argument("--model2_path", type=str, required=True)  # YOLO 2
     parser.add_argument("--model2_weight", type=float, default=0.5)
     parser.add_argument("--model3_path", type=str, required=True)  # RF-DETR
     parser.add_argument("--model3_weight", type=float, default=0.15)
@@ -59,6 +59,14 @@ def my_data_loader(main_path):
         img, target = preproc(np_img, None, (height, width))
         yield ((img.reshape(1, *img.shape), np_img), target, (height, width, torch.tensor(idx), None, ["test"]), None)
 
+def draw_boxes(image, detections, color=(0, 255, 0), label=""):
+    img = image.copy()
+    for det in detections:
+        x1, y1, x2, y2, conf = det.tolist()
+        cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
+        cv2.putText(img, f"{label} {conf:.2f}", (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+    return img
+
 def main():
     args = get_main_args()
     GeneralSettings.values['dataset'] = args.dataset
@@ -74,13 +82,13 @@ def main():
     BoostTrackPlusPlusSettings.values['use_vt'] = not args.btpp_arg_no_vt
 
     # Initialize detectors
-    yolo_det = YoloDetector(args.model1_path)
+    yolo1_det = YoloDetector(args.model1_path)
     yolo2_det = YoloDetector(args.model2_path)
     rfdetr_det = RFDETRDetector(args.model3_path)
 
     # Ensemble with three detectors
     det = EnsembleDetector(
-        model1=yolo_det,
+        model1=yolo1_det,
         model2=yolo2_det,
         model3=rfdetr_det,
         model1_weight=args.model1_weight,
@@ -92,6 +100,8 @@ def main():
     results = {}
     frame_count = 0
     total_time = 0
+    vis_folder = os.path.join(args.result_folder, args.exp_name, "visualizations")
+    os.makedirs(vis_folder, exist_ok=True)
 
     for (img, np_img), _, info, _ in my_data_loader(args.dataset_path):
         frame_id = info[2].item()
@@ -114,6 +124,27 @@ def main():
 
         if pred is None:
             continue
+
+        # Visualization every 50 frames
+        if frame_id % 50 == 0:
+            yolo1_preds = yolo1_det(np_img)
+            yolo2_preds = yolo2_det(np_img)
+            rfdetr_preds = rfdetr_det(np_img)
+            ensemble_preds = pred
+
+            # Draw detections on images
+            img_yolo1 = draw_boxes(np_img, yolo1_preds, color=(255, 0, 0), label="YOLO1")
+            img_yolo2 = draw_boxes(np_img, yolo2_preds, color=(0, 255, 0), label="YOLO2")
+            img_rfdetr = draw_boxes(np_img, rfdetr_preds, color=(0, 0, 255), label="RFDETR")
+            img_ensemble = draw_boxes(np_img, ensemble_preds, color=(255, 255, 0), label="Ensemble")
+
+            # Save images
+            cv2.imwrite(os.path.join(vis_folder, f"{video_name}_{frame_id}_yolo1.jpg"), img_yolo1)
+            cv2.imwrite(os.path.join(vis_folder, f"{video_name}_{frame_id}_yolo2.jpg"), img_yolo2)
+            cv2.imwrite(os.path.join(vis_folder, f"{video_name}_{frame_id}_rfdetr.jpg"), img_rfdetr)
+            cv2.imwrite(os.path.join(vis_folder, f"{video_name}_{frame_id}_ensemble.jpg"), img_ensemble)
+            print(f"Saved visualizations for frame {frame_id} in {vis_folder}")
+
         targets = tracker.update(pred, img, np_img, tag)
         tlwhs, ids, confs = utils.filter_targets(targets, GeneralSettings['aspect_ratio_thresh'], GeneralSettings['min_box_area'])
         print(f"{len(ids)} ids detected")
