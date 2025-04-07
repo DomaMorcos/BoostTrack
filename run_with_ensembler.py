@@ -75,13 +75,13 @@ def main():
 
     # Initialize detectors
     yolo_det = YoloDetector(args.model1_path)
-    frcnn_det = FasterRCNNDetector(args.model2_path)
+    yolo2_det = YoloDetector(args.model2_path)
     rfdetr_det = RFDETRDetector(args.model3_path)
 
     # Ensemble with three detectors
     det = EnsembleDetector(
         model1=yolo_det,
-        model2=frcnn_det,
+        model2=yolo2_det,
         model3=rfdetr_det,
         model1_weight=args.model1_weight,
         model2_weight=args.model2_weight,
