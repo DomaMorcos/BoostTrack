@@ -34,26 +34,31 @@ def get_main_args():
     parser.add_argument("--reid_weight2", type=float, default=0.5)
     parser.add_argument("--frame_rate", type=int, default=25)
 
-    args, unknown = parser.parse_known_args()
-    print("Known args:", args)
-    print("Unknown args:", unknown)
+    args = parser.parse_args()  # Parse all args directly
+    print("Parsed args:", args)
 
     detectors_info = {}
+    opts = args.opts if hasattr(args, 'opts') else []
     i = 1
-    while True:
-        path_key = f"--model{i}_path"
-        weight_key = f"--model{i}_weight"
-        if path_key not in unknown:
-            break
-        path_idx = unknown.index(path_key)
-        weight_idx = unknown.index(weight_key) if weight_key in unknown else -1
-        if path_idx + 1 >= len(unknown) or (weight_idx >= 0 and weight_idx + 1 >= len(unknown)):
-            break
-        path = unknown[path_idx + 1]
-        weight = float(unknown[weight_idx + 1]) if weight_idx >= 0 else 1.0 / i
-        detectors_info[f"model{i}"] = {"path": path, "weight": weight}
-        i += 1
-    
+    j = 0
+    while j < len(opts):
+        if opts[j] == f"--model{i}_path":
+            if j + 1 < len(opts):
+                path = opts[j + 1]
+                j += 2
+                # Look for weight
+                weight = 1.0 / i  # Default weight
+                if j < len(opts) and opts[j] == f"--model{i}_weight":
+                    if j + 1 < len(opts):
+                        weight = float(opts[j + 1])
+                        j += 2
+                detectors_info[f"model{i}"] = {"path": path, "weight": weight}
+                i += 1
+            else:
+                break
+        else:
+            j += 1
+
     print("Detectors info:", detectors_info)
     args.detectors_info = detectors_info
     if not detectors_info:
