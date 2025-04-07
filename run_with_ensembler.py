@@ -21,7 +21,7 @@ def get_main_args():
     parser.add_argument("--test_dataset", action="store_true")
     parser.add_argument("--exp_name", type=str, default="test")
     parser.add_argument("--no_reid", action="store_true")
-    parser.add_argument("--no_cmc", action="store_true")
+    parser.add_argument("--no_c(mc", action="store_true")
     parser.add_argument("--s_sim_corr", action="store_true")
     parser.add_argument("--btpp_arg_iou_boost", action="store_true")
     parser.add_argument("--btpp_arg_no_sb", action="store_true")
@@ -131,6 +131,12 @@ def main():
             yolo2_preds = yolo2_det(np_img)
             rfdetr_preds = rfdetr_det(np_img)
             ensemble_preds = pred
+
+            # Debug: Print prediction counts
+            print(f"YOLO1 detections: {len(yolo1_preds)}")
+            print(f"YOLO2 detections: {len(yolo2_preds)}")
+            print(f"RF-DETR detections: {len(rfdetr_preds)}")
+            print(f"Ensemble detections: {len(ensemble_preds)}")
 
             # Draw detections on images
             img_yolo1 = draw_boxes(np_img, yolo1_preds, color=(255, 0, 0), label="YOLO1")

@@ -9,9 +9,11 @@ from albumentations.pytorch import ToTensorV2
 import numpy as np
 import cv2
 from ensemble_boxes import weighted_boxes_fusion
-from rfdetr import RFDETRBase  # Import RF-DETR
+from rfdetr import RFDETRBase
 import supervision as sv
 from abc import ABC, abstractmethod
+import os
+from PIL import Image
 
 class Detector(ABC):
     @abstractmethod
@@ -33,7 +35,7 @@ class YoloDetector(Detector):
                 annotations.append(xyxy + [conf])
         return torch.tensor(annotations, dtype=torch.float32) if annotations else torch.zeros((0, 5), dtype=torch.float32)
 
-# Faster R-CNN Detector (unchanged, but made a subclass of Detector)
+# Faster R-CNN Detector (unchanged)
 class FasterRCNNDetector(Detector):
     def __init__(self, model_path):
         anchor_sizes = tuple((int(w),) for w, _ in [(8, 8), (16, 16), (32, 32), (64, 64), (128, 128)])
@@ -91,20 +93,28 @@ class FasterRCNNDetector(Detector):
         
         return annotations
 
-# RF-DETR Detector
+# RF-DETR Detector (updated to match official repo)
 class RFDETRDetector(Detector):
     def __init__(self, model_path):
         self.model = RFDETRBase(pretrain_weights=model_path)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.model.to(self.device)
+        self.temp_img_path = "/tmp/rfdetr_temp_image.jpg"  # Temporary file for prediction
 
     def __call__(self, img):
         orig_h, orig_w = img.shape[:2]
+        # Convert OpenCV image (BGR) to RGB and save to disk
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        pil_img = Image.fromarray(img_rgb)
+        pil_img.save(self.temp_img_path)
         
-        # Run inference
+        # Run inference using official repo style
         with torch.no_grad():
-            predictions = self.model.predict(img_rgb)  # Returns supervision.Detections
+            predictions = self.model.predict(self.temp_img_path)
         
+        # Debug: Check predictions
+        print(f"RF-DETR predictions: {predictions}")
+
         # Check if predictions is a supervision.Detections object
         if isinstance(predictions, sv.Detections):
             # Extract boxes, scores, and class IDs
@@ -112,22 +122,36 @@ class RFDETRDetector(Detector):
             scores = predictions.confidence  # [N] numpy array
             labels = predictions.class_id  # [N] numpy array
             
+            # Debug: Check raw outputs
+            print(f"RF-DETR boxes: {boxes}")
+            print(f"RF-DETR scores: {scores}")
+            print(f"RF-DETR labels: {labels}")
+
             # Filter for 'person' (class ID 0)
-            person_mask = labels == 0
-            boxes = boxes[person_mask]
-            scores = scores[person_mask]
-            
+            if labels is not None and len(labels) > 0:
+                person_mask = labels == 0
+                boxes = boxes[person_mask]
+                scores = scores[person_mask]
+            else:
+                boxes = np.array([])
+                scores = np.array([])
+
             if len(boxes) > 0:
                 # Combine boxes and scores into [x1, y1, x2, y2, conf] format
                 annotations = np.hstack((boxes, scores[:, np.newaxis]))
             else:
                 annotations = np.zeros((0, 5), dtype=np.float32)
         else:
-            raise ValueError(f"Unexpected RF-DETR prediction format: {type(predictions)}")
+            print(f"Unexpected RF-DETR prediction format: {type(predictions)}")
+            annotations = np.zeros((0, 5), dtype=np.float32)
+
+        # Clean up temporary file
+        if os.path.exists(self.temp_img_path):
+            os.remove(self.temp_img_path)
 
         return torch.tensor(annotations, dtype=torch.float32)
 
-# EnsembleDetector remains unchanged
+# EnsembleDetector (unchanged)
 class EnsembleDetector(Detector):
     def __init__(self, model1, model2, model3, model1_weight=0.35, model2_weight=0.5, model3_weight=0.15, iou_thresh=0.6):
         self.model1 = model1
