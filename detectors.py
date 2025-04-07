@@ -118,7 +118,7 @@ class FasterRCNNDetector:
 # In detectors.py
 
 class EnsembleDetector(Detector):
-    def __init__(self, model1: Detector, model2: Detector, model1_weight=0.7, model2_weight=0.3, iou_thresh=0.5, conf_thresh=0.3):
+    def __init__(self, model1: Detector, model2: Detector, model1_weight=0.7, model2_weight=0.3, iou_thresh=0.6, conf_thresh=0.28):
         self.model1 = model1
         self.model2 = model2
         self.model1_weight = model1_weight
