@@ -26,7 +26,7 @@ class GeneralSettings:
         'max_age': 30,
         'min_hits': 3,
         'det_thresh': 0.5,
-        'iou_threshold': 0.33,
+        'iou_threshold': 0.35,
         'use_ecc': True,
         'use_embedding': True,
         'dataset': 'mot17',
@@ -73,7 +73,7 @@ class GeneralSettings:
 
 class BoostTrackSettings:
     values: Dict[str, Union[float, bool, int, str]] = {
-        'lambda_iou': 0.5,  # 0 to turn off
+        'lambda_iou': 0.55,  # 0 to turn off
         'lambda_mhd': 0.25,  # 0 to turn off
         'lambda_shape': 0.25,  # 0 to turn off
         'use_dlo_boost': True,  # False to turn off
