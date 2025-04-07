@@ -12,7 +12,7 @@ from ultralytics import YOLO
 import cv2
 import numpy as np
 import torch
-from detectors import *
+from detectors import YoloDetector, FasterRCNNDetector, RFDETRDetector, EnsembleDetector
 
 def get_main_args():
     parser = make_parser()
@@ -33,14 +33,12 @@ def get_main_args():
     parser.add_argument("--reid_weight1", type=float, default=0.5)
     parser.add_argument("--reid_weight2", type=float, default=0.5)
     parser.add_argument("--frame_rate", type=int, default=25)
-    # Hardcoded models
-    parser.add_argument("--model1_path", type=str, required=True)
+    parser.add_argument("--model1_path", type=str, required=True)  # YOLO
     parser.add_argument("--model1_weight", type=float, default=0.35)
-    parser.add_argument("--model2_path", type=str, required=True)
+    parser.add_argument("--model2_path", type=str, required=True)  # Faster R-CNN
     parser.add_argument("--model2_weight", type=float, default=0.5)
-    parser.add_argument("--model3_path", type=str, required=True)
+    parser.add_argument("--model3_path", type=str, required=True)  # RF-DETR
     parser.add_argument("--model3_weight", type=float, default=0.15)
-
     args = parser.parse_args()
 
     if args.dataset == "mot17":
@@ -75,10 +73,19 @@ def main():
     BoostTrackPlusPlusSettings.values['use_sb'] = not args.btpp_arg_no_sb
     BoostTrackPlusPlusSettings.values['use_vt'] = not args.btpp_arg_no_vt
 
-    # Initialize hardcoded ensemble
+    # Initialize detectors
+    yolo_det = YoloDetector(args.model1_path)
+    frcnn_det = FasterRCNNDetector(args.model2_path)
+    rfdetr_det = RFDETRDetector(args.model3_path)
+
+    # Ensemble with three detectors
     det = EnsembleDetector(
-        model1_path=args.model1_path, model2_path=args.model2_path, model3_path=args.model3_path,
-        model1_weight=args.model1_weight, model2_weight=args.model2_weight, model3_weight=args.model3_weight
+        model1=yolo_det,
+        model2=frcnn_det,
+        model3=rfdetr_det,
+        model1_weight=args.model1_weight,
+        model2_weight=args.model2_weight,
+        model3_weight=args.model3_weight
     )
 
     tracker = None
