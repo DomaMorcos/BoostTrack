@@ -96,71 +96,53 @@ class RFDETRDetector(Detector):
         self.model = RFDETRBase(pretrain_weights=model_path)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-
     def __call__(self, img):
         orig_h, orig_w = img.shape[:2]
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         
         # Run inference
         with torch.no_grad():
-            predictions = self.model.predict(img_rgb)  # Assuming numpy array input
+            predictions = self.model.predict(img_rgb)  # Returns supervision.Detections
         
-        # Handle different possible output formats
-        if isinstance(predictions, tuple):  # e.g., (boxes, scores, labels)
-            try:
-                boxes, scores, labels = predictions
-            except ValueError:
-                raise ValueError("RF-DETR predict() returned a tuple, but it doesn’t match (boxes, scores, labels)")
+        # Check if predictions is a supervision.Detections object
+        if isinstance(predictions, sv.Detections):
+            # Extract boxes, scores, and class IDs
+            boxes = predictions.xyxy  # [N, 4] numpy array: [x1, y1, x2, y2]
+            scores = predictions.confidence  # [N] numpy array
+            labels = predictions.class_id  # [N] numpy array
             
-            # Convert to numpy if tensors
-            boxes = boxes.cpu().numpy() if torch.is_tensor(boxes) else boxes
-            scores = scores.cpu().numpy() if torch.is_tensor(scores) else scores
-            labels = labels.cpu().numpy() if torch.is_tensor(labels) else labels
-            
-            # Filter for 'person' (class ID 0 in COCO)
+            # Filter for 'person' (class ID 0)
             person_mask = labels == 0
             boxes = boxes[person_mask]
             scores = scores[person_mask]
             
             if len(boxes) > 0:
-                # Ensure boxes are in [x1, y1, x2, y2] format
+                # Combine boxes and scores into [x1, y1, x2, y2, conf] format
                 annotations = np.hstack((boxes, scores[:, np.newaxis]))
             else:
-                annotations = np.zeros((0, 5))
-        
-        elif isinstance(predictions, list):  # e.g., list of (x1, y1, x2, y2, conf, label)
-            annotations = []
-            for pred in predictions:
-                if len(pred) >= 6 and pred[5] == 0:  # Assuming label is last element, 0 = 'person'
-                    box = pred[:4]  # [x1, y1, x2, y2]
-                    conf = pred[4]  # Confidence score
-                    annotations.append(list(box) + [conf])
-            annotations = np.array(annotations) if annotations else np.zeros((0, 5))
-        
+                annotations = np.zeros((0, 5), dtype=np.float32)
         else:
             raise ValueError(f"Unexpected RF-DETR prediction format: {type(predictions)}")
 
         return torch.tensor(annotations, dtype=torch.float32)
 
-# Ensemble Detector (adjusted to handle three models)
+# EnsembleDetector remains unchanged
 class EnsembleDetector(Detector):
     def __init__(self, model1, model2, model3, model1_weight=0.35, model2_weight=0.5, model3_weight=0.15, iou_thresh=0.6):
-        self.model1 = model1  # YoloDetector
-        self.model2 = model2  # FasterRCNNDetector
-        self.model3 = model3  # RFDETRDetector
+        self.model1 = model1
+        self.model2 = model2
+        self.model3 = model3
         self.weights = [model1_weight, model2_weight, model3_weight]
         self.iou_thresh = iou_thresh
 
     def __call__(self, img):
         orig_h, orig_w = img.shape[:2]
-
-        # Get predictions from all three models
         preds = [self.model1(img), self.model2(img), self.model3(img)]
         boxes_list, scores_list, labels_list = [], [], []
 
         for pred in preds:
             if len(pred) > 0:
-                boxes = pred[:, :4].numpy() / np.array([orig_w, orig_h, orig_w, orig_h])  # Normalize
+                boxes = pred[:, :4].numpy() / np.array([orig_w, orig_h, orig_w, orig_h])
                 scores = pred[:, 4].numpy()
                 labels = np.zeros(len(scores))  # All 'person' (class 0)
                 boxes_list.append(boxes)
@@ -171,17 +153,15 @@ class EnsembleDetector(Detector):
                 scores_list.append(np.array([]))
                 labels_list.append(np.array([]))
 
-        # Weighted Box Fusion
         boxes, scores, labels = weighted_boxes_fusion(
             boxes_list, scores_list, labels_list, weights=self.weights, iou_thr=self.iou_thresh, skip_box_thr=0.0
         )
 
-        # Filter to 'person' (class 0)
         person_mask = labels == 0
         boxes, scores = boxes[person_mask], scores[person_mask]
 
         if len(boxes) > 0:
-            boxes *= np.array([orig_w, orig_h, orig_w, orig_h])  # Scale back
+            boxes *= np.array([orig_w, orig_h, orig_w, orig_h])
             annotations = torch.tensor(np.hstack((boxes, scores[:, np.newaxis])), dtype=torch.float32)
         else:
             annotations = torch.zeros((0, 5), dtype=torch.float32)
