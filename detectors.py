@@ -98,7 +98,7 @@ class RFDETRDetector(Detector):
     def __init__(self, model_path):
         self.model = RFDETRBase(pretrain_weights=model_path)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model.to(self.device)
+
         self.temp_img_path = "/tmp/rfdetr_temp_image.jpg"  # Temporary file for prediction
 
     def __call__(self, img):
