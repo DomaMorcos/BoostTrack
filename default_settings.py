@@ -78,7 +78,7 @@ class BoostTrackSettings:
         'lambda_shape': 0.25,  # 0 to turn off
         'use_dlo_boost': True,  # False to turn off
         'use_duo_boost': True,  # False to turn off
-        'dlo_boost_coef': 0.55,  # Irrelevant if use_dlo_boost == False
+        'dlo_boost_coef': 0.5,  # Irrelevant if use_dlo_boost == False
         's_sim_corr': False  # Which shape similarity function should be used (True == corrected version)
     }
     dataset_specific_settings: Dict[str, Dict[str, Union[float, bool, int]]] = {
