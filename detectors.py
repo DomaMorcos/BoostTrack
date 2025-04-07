@@ -95,7 +95,7 @@ class RFDETRDetector(Detector):
     def __init__(self, model_path):
         self.model = RFDETRBase(pretrain_weights=model_path)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
+        self.model.to(self.device)
         self.temp_img_path = "/tmp/rfdetr_temp_image.jpg"  # Temporary file for prediction
 
     def __call__(self, img):
@@ -110,7 +110,7 @@ class RFDETRDetector(Detector):
             predictions = self.model.predict(self.temp_img_path)
         
         # Debug: Check predictions
-        # print(f"RF-DETR predictions: {predictions}")
+        print(f"RF-DETR predictions: {predictions}")
 
         # Check if predictions is a supervision.Detections object
         if isinstance(predictions, sv.Detections):
@@ -119,10 +119,10 @@ class RFDETRDetector(Detector):
             scores = predictions.confidence  # [N] numpy array
             labels = predictions.class_id  # [N] numpy array
             
-            # # Debug: Check raw outputs
-            # print(f"RF-DETR boxes: {boxes}")
-            # print(f"RF-DETR scores: {scores}")
-            # print(f"RF-DETR labels: {labels}")
+            # Debug: Check raw outputs
+            print(f"RF-DETR boxes: {boxes}")
+            print(f"RF-DETR scores: {scores}")
+            print(f"RF-DETR labels: {labels}")
 
             # Filter for 'person' (class ID 1, based on your output)
             if labels is not None and len(labels) > 0:
@@ -149,12 +149,13 @@ class RFDETRDetector(Detector):
         return torch.tensor(annotations, dtype=torch.float32)
 
 class EnsembleDetector(Detector):
-    def __init__(self, model1, model2, model3, model1_weight=0.35, model2_weight=0.5, model3_weight=0.15, iou_thresh=0.6):
+    def __init__(self, model1, model2, model3, model1_weight=0.35, model2_weight=0.5, model3_weight=0.15, iou_thresh=0.6, conf_thresh=0.3):
         self.model1 = model1
         self.model2 = model2
         self.model3 = model3
         self.weights = [model1_weight, model2_weight, model3_weight]
         self.iou_thresh = iou_thresh
+        self.conf_thresh = conf_thresh  # Added confidence threshold parameter
 
     def __call__(self, img):
         orig_h, orig_w = img.shape[:2]
@@ -178,8 +179,15 @@ class EnsembleDetector(Detector):
             boxes_list, scores_list, labels_list, weights=self.weights, iou_thr=self.iou_thresh, skip_box_thr=0.0
         )
 
+        # Filter to 'person' (class 0)
         person_mask = labels == 0
-        boxes, scores = boxes[person_mask], scores[person_mask]
+        boxes = boxes[person_mask]
+        scores = scores[person_mask]
+
+        # Apply confidence threshold
+        conf_mask = scores > self.conf_thresh
+        boxes = boxes[conf_mask]
+        scores = scores[conf_mask]
 
         if len(boxes) > 0:
             boxes *= np.array([orig_w, orig_h, orig_w, orig_h])
