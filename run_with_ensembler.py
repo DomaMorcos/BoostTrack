@@ -21,7 +21,7 @@ def get_main_args():
     parser.add_argument("--test_dataset", action="store_true")
     parser.add_argument("--exp_name", type=str, default="test")
     parser.add_argument("--no_reid", action="store_true")
-    parser.add_argument("--no_c(mc", action="store_true")
+    parser.add_argument("--no_cmc", action="store_true")
     parser.add_argument("--s_sim_corr", action="store_true")
     parser.add_argument("--btpp_arg_iou_boost", action="store_true")
     parser.add_argument("--btpp_arg_no_sb", action="store_true")
