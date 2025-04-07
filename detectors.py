@@ -95,7 +95,6 @@ class RFDETRDetector(Detector):
     def __init__(self, model_path):
         self.model = RFDETRBase(pretrain_weights=model_path)  # Load weights during init
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model.to(self.device)
         self.model.eval()
 
     def __call__(self, img):
