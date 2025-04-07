@@ -95,7 +95,7 @@ class RFDETRDetector(Detector):
     def __init__(self, model_path):
         self.model = RFDETRBase(pretrain_weights=model_path)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model.to(self.device)
+        # self.model.to(self.device)
         self.temp_img_path = "/tmp/rfdetr_temp_image.jpg"  # Temporary file for prediction
 
     def __call__(self, img):
@@ -110,7 +110,7 @@ class RFDETRDetector(Detector):
             predictions = self.model.predict(self.temp_img_path)
         
         # Debug: Check predictions
-        print(f"RF-DETR predictions: {predictions}")
+        # print(f"RF-DETR predictions: {predictions}")
 
         # Check if predictions is a supervision.Detections object
         if isinstance(predictions, sv.Detections):
@@ -120,9 +120,9 @@ class RFDETRDetector(Detector):
             labels = predictions.class_id  # [N] numpy array
             
             # Debug: Check raw outputs
-            print(f"RF-DETR boxes: {boxes}")
-            print(f"RF-DETR scores: {scores}")
-            print(f"RF-DETR labels: {labels}")
+            # print(f"RF-DETR boxes: {boxes}")
+            # print(f"RF-DETR scores: {scores}")
+            # print(f"RF-DETR labels: {labels}")
 
             # Filter for 'person' (class ID 1, based on your output)
             if labels is not None and len(labels) > 0:

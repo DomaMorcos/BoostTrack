@@ -87,13 +87,15 @@ def main():
     rfdetr_det = RFDETRDetector(args.model3_path)
 
     # Ensemble with three detectors
+    # Ensemble with three detectors
     det = EnsembleDetector(
         model1=yolo1_det,
         model2=yolo2_det,
         model3=rfdetr_det,
         model1_weight=args.model1_weight,
         model2_weight=args.model2_weight,
-        model3_weight=args.model3_weight
+        model3_weight=args.model3_weight,
+        conf_thresh=0.3  # Added confidence threshold
     )
 
     tracker = None
