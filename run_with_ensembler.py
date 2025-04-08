@@ -12,7 +12,7 @@ from ultralytics import YOLO
 import cv2
 import numpy as np
 import torch
-from detectors import YoloDetector, RFDETRDetector, EnsembleDetector
+from detectors_v2 import YoloDetector, EnsembleDetector
 
 def get_main_args():
     parser = make_parser()
@@ -33,12 +33,10 @@ def get_main_args():
     parser.add_argument("--reid_weight1", type=float, default=0.5)
     parser.add_argument("--reid_weight2", type=float, default=0.5)
     parser.add_argument("--frame_rate", type=int, default=25)
-    parser.add_argument("--model1_path", type=str, required=True)  # YOLO 1
+    parser.add_argument("--model1_path", type=str, required=True)  # YOLOv12l
     parser.add_argument("--model1_weight", type=float, default=0.35)
-    parser.add_argument("--model2_path", type=str, required=True)  # YOLO 2
+    parser.add_argument("--model2_path", type=str, required=True)  # YOLOv12x
     parser.add_argument("--model2_weight", type=float, default=0.5)
-    parser.add_argument("--model3_path", type=str, required=True)  # RF-DETR
-    parser.add_argument("--model3_weight", type=float, default=0.15)
     args = parser.parse_args()
 
     if args.dataset == "mot17":
@@ -84,18 +82,15 @@ def main():
     # Initialize detectors
     yolo1_det = YoloDetector(args.model1_path)  # YOLOv12l
     yolo2_det = YoloDetector(args.model2_path)  # YOLOv12x
-    rfdetr_det = RFDETRDetector(args.model3_path)  # RF-DETR
 
-    # Ensemble with three detectors
+    # Ensemble with two detectors
     det = EnsembleDetector(
         model1=yolo1_det,
         model2=yolo2_det,
-        model3=rfdetr_det,
         model1_weight=args.model1_weight,
         model2_weight=args.model2_weight,
-        model3_weight=args.model3_weight,
         conf_thresh=0.3,
-        small_box_threshold=1024  # 32x32 pixels, adjust as needed
+        small_box_threshold=1024
     )
 
     tracker = None
@@ -131,25 +126,18 @@ def main():
         if frame_id % 50 == 0:
             yolo1_preds = yolo1_det(np_img)
             yolo2_preds = yolo2_det(np_img)
-            rfdetr_preds = rfdetr_det(np_img)
             ensemble_preds = pred
 
-            # Debug: Print prediction counts
-            # print(f"YOLO1 detections: {len(yolo1_preds)}")
-            # print(f"YOLO2 detections: {len(yolo2_preds)}")
-            # print(f"RF-DETR detections: {len(rfdetr_preds)}")
-            # print(f"Ensemble detections: {len(ensemble_preds)}")
+            print(f"YOLO1 detections: {len(yolo1_preds)}")
+            print(f"YOLO2 detections: {len(yolo2_preds)}")
+            print(f"Ensemble detections: {len(ensemble_preds)}")
 
-            # Draw detections on images
             img_yolo1 = draw_boxes(np_img, yolo1_preds, color=(255, 0, 0), label="YOLO1")
             img_yolo2 = draw_boxes(np_img, yolo2_preds, color=(0, 255, 0), label="YOLO2")
-            img_rfdetr = draw_boxes(np_img, rfdetr_preds, color=(0, 0, 255), label="RFDETR")
             img_ensemble = draw_boxes(np_img, ensemble_preds, color=(255, 255, 0), label="Ensemble")
 
-            # Save images
             cv2.imwrite(os.path.join(vis_folder, f"{video_name}_{frame_id}_yolo1.jpg"), img_yolo1)
             cv2.imwrite(os.path.join(vis_folder, f"{video_name}_{frame_id}_yolo2.jpg"), img_yolo2)
-            cv2.imwrite(os.path.join(vis_folder, f"{video_name}_{frame_id}_rfdetr.jpg"), img_rfdetr)
             cv2.imwrite(os.path.join(vis_folder, f"{video_name}_{frame_id}_ensemble.jpg"), img_ensemble)
             print(f"Saved visualizations for frame {frame_id} in {vis_folder}")
 
@@ -181,7 +169,6 @@ def main():
         post_folder_data = os.path.join(post_folder, "data")
         interval = 1000
         utils.dti(post_folder_data, post_folder_data, n_dti=interval, n_min=25)
-
         print(f"Linear interpolation post-processing applied, saved to {post_folder_data}.")
 
         res_folder = os.path.join(args.result_folder, args.exp_name, "data")
