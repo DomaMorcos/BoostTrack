@@ -90,7 +90,7 @@ def main():
         model1_weight=args.model1_weight,
         model2_weight=args.model2_weight,
         conf_thresh=0.3,
-        small_box_threshold=1200
+        small_box_threshold=4096
     )
 
     tracker = None
