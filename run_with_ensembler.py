@@ -12,7 +12,7 @@ from ultralytics import YOLO
 import cv2
 import numpy as np
 import torch
-from detectors_v2 import YoloDetector, EnsembleDetector
+from detectors import YoloDetector, EnsembleDetector
 
 def get_main_args():
     parser = make_parser()
