@@ -43,16 +43,15 @@ class EnsembleDetector(Detector):
             if len(pred) > 0:
                 boxes = pred[:, :4].numpy()
                 scores = pred[:, 4].numpy()
-                boxes_normalized = boxes / np.array([orig_w, orig_h, orig_w, orig_h])
-                labels = np.zeros(len(scores))  # All 'person' (class 0)
-                
                 areas = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
-                weights = np.full(len(scores), self.base_weights[i])
-                if i == 1:  # YOLOv12x
-                    weights[areas < self.small_box_threshold] = self.base_weights[i] * 0.2
-                elif i == 0:  # YOLOv12l
-                    weights[areas < self.small_box_threshold] = self.base_weights[i] * 1.5
                 
+                if i == 1:  # YOLOv12x: Filter out small boxes
+                    mask = areas >= self.small_box_threshold
+                    boxes = boxes[mask]
+                    scores = scores[mask]
+                boxes_normalized = boxes / np.array([orig_w, orig_h, orig_w, orig_h])
+                labels = np.zeros(len(scores))
+
                 boxes_list.append(boxes_normalized)
                 scores_list.append(scores)
                 labels_list.append(labels)
