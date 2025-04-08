@@ -82,11 +82,10 @@ def main():
     BoostTrackPlusPlusSettings.values['use_vt'] = not args.btpp_arg_no_vt
 
     # Initialize detectors
-    yolo1_det = YoloDetector(args.model1_path)
-    yolo2_det = YoloDetector(args.model2_path)
-    rfdetr_det = RFDETRDetector(args.model3_path)
+    yolo1_det = YoloDetector(args.model1_path)  # YOLOv12l
+    yolo2_det = YoloDetector(args.model2_path)  # YOLOv12x
+    rfdetr_det = RFDETRDetector(args.model3_path)  # RF-DETR
 
-    # Ensemble with three detectors
     # Ensemble with three detectors
     det = EnsembleDetector(
         model1=yolo1_det,
@@ -95,7 +94,8 @@ def main():
         model1_weight=args.model1_weight,
         model2_weight=args.model2_weight,
         model3_weight=args.model3_weight,
-        conf_thresh=0.3  # Added confidence threshold
+        conf_thresh=0.3,
+        small_box_threshold=1024  # 32x32 pixels, adjust as needed
     )
 
     tracker = None
@@ -135,10 +135,10 @@ def main():
             ensemble_preds = pred
 
             # Debug: Print prediction counts
-            print(f"YOLO1 detections: {len(yolo1_preds)}")
-            print(f"YOLO2 detections: {len(yolo2_preds)}")
-            print(f"RF-DETR detections: {len(rfdetr_preds)}")
-            print(f"Ensemble detections: {len(ensemble_preds)}")
+            # print(f"YOLO1 detections: {len(yolo1_preds)}")
+            # print(f"YOLO2 detections: {len(yolo2_preds)}")
+            # print(f"RF-DETR detections: {len(rfdetr_preds)}")
+            # print(f"Ensemble detections: {len(ensemble_preds)}")
 
             # Draw detections on images
             img_yolo1 = draw_boxes(np_img, yolo1_preds, color=(255, 0, 0), label="YOLO1")
