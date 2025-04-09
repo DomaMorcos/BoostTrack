@@ -89,7 +89,7 @@ def main():
     det_results = {}
     for frame_id, img, np_img, info in my_data_loader(args.dataset_path):
         if np_img is None:
-            det_results[frame_id] = np.zeros((0, 5 + 768), dtype=np.float32)
+            det_results[frame_id] = np.zeros((0, 5 + 256), dtype=np.float32)  # Adjusted to 256 based on output
             continue
 
         print(f"Processing frame {frame_id}\r", end="")
@@ -111,7 +111,7 @@ def main():
         pred = det(img)
         if pred is None:
             print(f"Frame {frame_id}: No detections after ensemble")
-            det_results[frame_id] = np.zeros((0, 5 + 768), dtype=np.float32)
+            det_results[frame_id] = np.zeros((0, 5 + 256), dtype=np.float32)  # Adjusted to 256
             continue
 
         # Debug: Number of detections after ensemble
@@ -149,8 +149,8 @@ def main():
         # Visualize detections for the first 5 frames
         if frame_id <= 5 and dets.shape[0] > 0:
             vis_img = np_img.copy()
-            for det in dets:
-                x1, y1, x2, y2, conf = det[:5]
+            for bbox in dets:  # Renamed 'det' to 'bbox' to avoid shadowing
+                x1, y1, x2, y2, conf = bbox[:5]
                 x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
                 cv2.rectangle(vis_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 cv2.putText(vis_img, f"{conf:.2f}", (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
@@ -158,23 +158,14 @@ def main():
             print(f"Saved visualization for frame {frame_id}")
 
         if dets.shape[0] == 0:
-            det_results[frame_id] = np.zeros((0, 5 + 768), dtype=np.float32)
+            det_results[frame_id] = np.zeros((0, 5 + 256), dtype=np.float32)  # Adjusted to 256
             continue
 
         # Compute ReID features
-        dets_embs = np.zeros((dets.shape[0], 768), dtype=np.float32)
+        dets_embs = np.zeros((dets.shape[0], 256), dtype=np.float32)  # Adjusted to 256 based on output
         if dets.size > 0:
             dets_embs = embedder.compute_embedding(np_img, dets[:, :4], tag)
             print(f"Feature dimension for frame {frame_id}: {dets_embs.shape[1]}")  # Debug print
-
-        # If feature dimension is 256, adjust the storage
-        if dets_embs.shape[1] != 768:
-            print(f"Warning: Feature dimension is {dets_embs.shape[1]}, expected 768. Adjusting storage.")
-            det_results[frame_id] = np.zeros((0, 5 + dets_embs.shape[1]), dtype=np.float32)
-            if dets.shape[0] == 0:
-                continue
-            dets_embs = np.zeros((dets.shape[0], dets_embs.shape[1]), dtype=np.float32)
-            dets_embs = embedder.compute_embedding(np_img, dets[:, :4], tag)
 
         # Combine detections and features
         dets_with_feats = np.concatenate((dets, dets_embs), axis=1)
