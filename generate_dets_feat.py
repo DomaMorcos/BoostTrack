@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 import torch
 from argparse import ArgumentParser
+from torchvision.ops import nms
 
 import dataset
 from default_settings import GeneralSettings, BoostTrackSettings, BoostTrackPlusPlusSettings
@@ -19,10 +20,10 @@ def make_parser():
     parser.add_argument("--frame_rate", type=int, default=25, help="Frame rate of the sequence")
     parser.add_argument("--reid_path", type=str, required=True, help="Path to ReID model weights")
     parser.add_argument("--dataset_path", type=str, required=True, help="Path to image sequence (e.g., MOT20-01/img1)")
-    parser.add_argument("--model1_path", type=str, required=True, help="Path to first YOLO model weights")
-    parser.add_argument("--model1_weight", type=float, default=0.5, help="Weight for first model in ensemble")
-    parser.add_argument("--model2_path", type=str, required=True, help="Path to second YOLO model weights")
-    parser.add_argument("--model2_weight", type=float, default=0.5, help="Weight for second model in ensemble")
+    parser.add_argument("--model1_path", type=str, required=True, help="Path to first YOLO model weights (yolo12l)")
+    parser.add_argument("--model1_weight", type=float, default=0.6, help="Weight for first model in ensemble (yolo12l)")
+    parser.add_argument("--model2_path", type=str, required=True, help="Path to second YOLO model weights (yolo12x)")
+    parser.add_argument("--model2_weight", type=float, default=0.4, help="Weight for second model in ensemble (yolo12x)")
     parser.add_argument("--iou_thresh", type=float, default=0.6, help="IoU threshold for WBF")
     parser.add_argument("--conf_thresh", type=float, default=0.3, help="Confidence threshold for detections post-WBF")
     parser.add_argument("--output_pickle", type=str, default="dets_feat.pickle", help="Name of the output pickle file")
@@ -70,12 +71,14 @@ def main():
     GeneralSettings.values['reid_path'] = args.reid_path
     GeneralSettings.values['max_age'] = args.frame_rate
     GeneralSettings.values['test_dataset'] = False  # Ensure OSNet is used
-    # Lower the detection threshold to improve recall
-    GeneralSettings.values['det_thresh'] = 0.1  # Reduced from default (e.g., 0.3) to match run_with_ensembler.py
+    GeneralSettings.values['det_thresh'] = 0.1  # Keep lowered threshold for better recall
 
-    # Initialize detectors using the new classes
-    model1 = YoloDetectorV2(args.model1_path)
-    model2 = YoloDetectorV2(args.model2_path)
+    # Tune confidence boosting
+    BoostTrackSettings.values['dlo_boost_coef'] = 0.5  # Adjust to potentially match run_with_ensembler.py
+
+    # Initialize detectors with native resolutions
+    model1 = YoloDetectorV2(args.model1_path, input_size=1280)  # yolo12l at 1280x1280
+    model2 = YoloDetectorV2(args.model2_path, input_size=960)   # yolo12x at 960x960
     det = EnsembleDetectorV2(model1, model2, args.model1_weight, args.model2_weight, args.iou_thresh, args.conf_thresh)
 
     # Initialize EmbeddingComputer for ReID features
@@ -86,7 +89,7 @@ def main():
     det_results = {}
     for frame_id, img, np_img, info in my_data_loader(args.dataset_path):
         if np_img is None:
-            det_results[frame_id] = np.zeros((0, 5 + 768), dtype=np.float32)  # Updated to 768 based on previous output
+            det_results[frame_id] = np.zeros((0, 5 + 768), dtype=np.float32)
             continue
 
         print(f"Processing frame {frame_id}\r", end="")
@@ -101,11 +104,18 @@ def main():
         # Run detection
         pred = det(img)
         if pred is None:
-            det_results[frame_id] = np.zeros((0, 5 + 768), dtype=np.float32)  # Updated to 768
+            det_results personally, I think this is a good idea to have a look at the following link: https://www.youtube.com/watch?v=9bZkp7q19f0[frame_id] = np.zeros((0, 5 + 768), dtype=np.float32)
             continue
 
         # Rescale detections to original image size (already handled in YoloDetectorV2)
-        dets = pred.cpu().numpy()
+        dets = pred.cpu()
+
+        # Apply NMS to reduce duplicate detections
+        if dets.shape[0] > 0:
+            boxes = dets[:, :4]  # [x1, y1, x2, y2]
+            scores = dets[:, 4]
+            keep = nms(boxes, scores, iou_threshold=0.5)  # Adjust IoU threshold as needed
+            dets = dets[keep].numpy()
 
         # Manually apply confidence boosting (mimicking BoostTrack.process_detections)
         if dets.shape[0] > 0:
@@ -125,11 +135,11 @@ def main():
             dets = dets[dets[:, 4] >= GeneralSettings['det_thresh']]
 
         if dets.shape[0] == 0:
-            det_results[frame_id] = np.zeros((0, 5 + 768), dtype=np.float32)  # Updated to 768
+            det_results[frame_id] = np.zeros((0, 5 + 768), dtype=np.float32)
             continue
 
         # Compute ReID features
-        dets_embs = np.zeros((dets.shape[0], 768), dtype=np.float32)  # Updated to 768
+        dets_embs = np.zeros((dets.shape[0], 768), dtype=np.float32)
         if dets.size > 0:
             dets_embs = embedder.compute_embedding(np_img, dets[:, :4], tag)
             print(f"Feature dimension for frame {frame_id}: {dets_embs.shape[1]}")  # Debug print

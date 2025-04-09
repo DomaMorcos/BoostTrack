@@ -184,9 +184,9 @@ class EnsembleDetector(Detector):
         return annotations
     
 class YoloDetectorV2(Detector):
-    def __init__(self, yolo_path):
+    def __init__(self, yolo_path, input_size=1280):
         self.model = YOLO(yolo_path)
-        self.input_size = 1280  # Use 1280x1280 for both models
+        self.input_size = input_size  # Custom input size for each model
 
     def __call__(self, img):
         # img shape: (1, 3, height, width)
@@ -255,7 +255,7 @@ class EnsembleDetectorV2(Detector):
         labels_list = []
         weights = []
 
-        # Model 1 predictions
+        # Model 1 predictions (yolo12l at 1280x1280)
         if model1_preds.shape[0] > 0:
             height, width = img.shape[2], img.shape[3]
             boxes = model1_preds[:, :4].cpu().numpy()
@@ -268,7 +268,7 @@ class EnsembleDetectorV2(Detector):
             labels_list.append(labels)
             weights.append(self.model1_weight)
 
-        # Model 2 predictions
+        # Model 2 predictions (yolo12x at 960x960)
         if model2_preds.shape[0] > 0:
             height, width = img.shape[2], img.shape[3]
             boxes = model2_preds[:, :4].cpu().numpy()
