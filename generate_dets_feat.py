@@ -71,7 +71,7 @@ def main():
     GeneralSettings.values['reid_path'] = args.reid_path
     GeneralSettings.values['max_age'] = args.frame_rate
     GeneralSettings.values['test_dataset'] = False  # Ensure OSNet is used
-    GeneralSettings.values['det_thresh'] = 0.01  # Further lowered for better recall
+    GeneralSettings.values['det_thresh'] = 0.005  # Further lowered for better recall
 
     # Tune confidence boosting
     BoostTrackSettings.values['dlo_boost_coef'] = 0.7  # Increased to make boosting more aggressive
@@ -124,7 +124,7 @@ def main():
         if dets.shape[0] > 0:
             boxes = dets[:, :4]  # [x1, y1, x2, y2]
             scores = dets[:, 4]
-            keep = nms(boxes, scores, iou_threshold=0.6)  # Increased to retain more detections
+            keep = nms(boxes, scores, iou_threshold=0.3)  # Increased to retain more detections
             dets = dets[keep].numpy()
             print(f"Frame {frame_id}: Detections after NMS: {dets.shape[0]}")
 
