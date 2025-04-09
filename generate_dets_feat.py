@@ -35,6 +35,7 @@ def my_data_loader(main_path):
         rgb_means=(0.485, 0.456, 0.406),
         std=(0.229, 0.224, 0.225),
     )
+    target_size = 640  # Resize to 640x640 to match typical YOLO input resolution
     for idx, img_path in enumerate(img_paths, 1):
         np_img = cv2.imread(img_path)
         if np_img is None:
@@ -48,10 +49,14 @@ def my_data_loader(main_path):
             print(f"Error: Invalid image dimensions for {img_path}: height={height}, width={width}")
             yield idx, None, None, None
             continue
-        img, _ = preproc(np_img, None, (height, width))
+        # Pre-resize the image to target_size x target_size
+        np_img_resized = cv2.resize(np_img, (target_size, target_size), interpolation=cv2.INTER_LINEAR)
+        print(f"Frame {idx}: Resized image shape: {np_img_resized.shape}")
+        # Apply ValTransform on the resized image
+        img, _ = preproc(np_img_resized, None, (target_size, target_size))
         img = img.reshape(1, *img.shape)
         print(f"Frame {idx}: Input image shape to detector: {img.shape}")
-        yield idx, img, np_img, (height, width, idx, None, ["test"])
+        yield idx, img, np_img, (height, width, idx, None, ["test"])  # Return original np_img for ReID
 
 def main():
     args = make_parser().parse_args()
