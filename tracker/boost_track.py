@@ -155,6 +155,20 @@ class BoostTrack(object):
             self.ecc = ECC(scale=350, video_name=video_name, use_cache=True)
         else:
             self.ecc = None
+    def process_detections(self, dets, img, np_img, tag):
+        """Process detections with confidence boosting and thresholding, without tracking."""
+        if dets.shape[0] == 0:
+            return dets
+
+        # Confidence boosting
+        if BoostTrackSettings['use_dlo_boost']:
+            dets = self.dlo_confidence_boost(dets, img, np_img, tag)
+        if BoostTrackSettings['use_duo_boost']:
+            dets = self.duo_confidence_boost(dets, img, np_img, tag)
+
+        # Apply detection threshold
+        dets = dets[dets[:, 4] >= self.det_thresh]
+        return dets
 
     def update(self, dets, img_tensor, img_numpy, tag):
         """
