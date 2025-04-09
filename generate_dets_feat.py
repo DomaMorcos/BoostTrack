@@ -124,7 +124,7 @@ def main():
         if dets.shape[0] > 0:
             boxes = dets[:, :4]  # [x1, y1, x2, y2]
             scores = dets[:, 4]
-            keep = nms(boxes, scores, iou_threshold=0.3)  # Increased to retain more detections
+            keep = nms(boxes, scores, iou_threshold=0.8)  # Increased to retain more detections
             dets = dets[keep].numpy()
             print(f"Frame {frame_id}: Detections after NMS: {dets.shape[0]}")
 
