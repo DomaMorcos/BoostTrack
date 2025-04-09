@@ -71,10 +71,10 @@ def main():
     GeneralSettings.values['reid_path'] = args.reid_path
     GeneralSettings.values['max_age'] = args.frame_rate
     GeneralSettings.values['test_dataset'] = False  # Ensure OSNet is used
-    GeneralSettings.values['det_thresh'] = 0.1  # Keep lowered threshold for better recall
+    GeneralSettings.values['det_thresh'] = 0.1  # Lowered for better recall; can try 0.05 if recall is still low
 
     # Tune confidence boosting
-    BoostTrackSettings.values['dlo_boost_coef'] = 0.5  # Adjust to potentially match run_with_ensembler.py
+    BoostTrackSettings.values['dlo_boost_coef'] = 0.5  # Adjusted to potentially match run_with_ensembler.py
 
     # Initialize detectors with native resolutions
     model1 = YoloDetectorV2(args.model1_path, input_size=1280)  # yolo12l at 1280x1280
@@ -104,7 +104,7 @@ def main():
         # Run detection
         pred = det(img)
         if pred is None:
-            det_results personally, I think this is a good idea to have a look at the following link: https://www.youtube.com/watch?v=9bZkp7q19f0[frame_id] = np.zeros((0, 5 + 768), dtype=np.float32)
+            det_results[frame_id] = np.zeros((0, 5 + 768), dtype=np.float32)
             continue
 
         # Rescale detections to original image size (already handled in YoloDetectorV2)
