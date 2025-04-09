@@ -70,6 +70,8 @@ def main():
     GeneralSettings.values['reid_path'] = args.reid_path
     GeneralSettings.values['max_age'] = args.frame_rate
     GeneralSettings.values['test_dataset'] = False  # Ensure OSNet is used
+    # Lower the detection threshold to improve recall
+    GeneralSettings.values['det_thresh'] = 0.1  # Reduced from default (e.g., 0.3) to match run_with_ensembler.py
 
     # Initialize detectors using the new classes
     model1 = YoloDetectorV2(args.model1_path)
@@ -84,7 +86,7 @@ def main():
     det_results = {}
     for frame_id, img, np_img, info in my_data_loader(args.dataset_path):
         if np_img is None:
-            det_results[frame_id] = np.zeros((0, 5 + 256), dtype=np.float32)  # OSNet embedding_dim=256
+            det_results[frame_id] = np.zeros((0, 5 + 768), dtype=np.float32)  # Updated to 768 based on previous output
             continue
 
         print(f"Processing frame {frame_id}\r", end="")
@@ -99,7 +101,7 @@ def main():
         # Run detection
         pred = det(img)
         if pred is None:
-            det_results[frame_id] = np.zeros((0, 5 + 256), dtype=np.float32)
+            det_results[frame_id] = np.zeros((0, 5 + 768), dtype=np.float32)  # Updated to 768
             continue
 
         # Rescale detections to original image size (already handled in YoloDetectorV2)
@@ -123,16 +125,16 @@ def main():
             dets = dets[dets[:, 4] >= GeneralSettings['det_thresh']]
 
         if dets.shape[0] == 0:
-            det_results[frame_id] = np.zeros((0, 5 + 256), dtype=np.float32)
+            det_results[frame_id] = np.zeros((0, 5 + 768), dtype=np.float32)  # Updated to 768
             continue
 
         # Compute ReID features
-        dets_embs = np.zeros((dets.shape[0], 256), dtype=np.float32)  # OSNet embedding_dim=256
+        dets_embs = np.zeros((dets.shape[0], 768), dtype=np.float32)  # Updated to 768
         if dets.size > 0:
             dets_embs = embedder.compute_embedding(np_img, dets[:, :4], tag)
             print(f"Feature dimension for frame {frame_id}: {dets_embs.shape[1]}")  # Debug print
 
-        # Combine detections and features: [x1, y1, x2, y2, conf, feat_1, ..., feat_256]
+        # Combine detections and features: [x1, y1, x2, y2, conf, feat_1, ..., feat_768]
         dets_with_feats = np.concatenate((dets, dets_embs), axis=1)
         det_results[frame_id] = dets_with_feats
 

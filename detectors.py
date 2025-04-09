@@ -186,7 +186,7 @@ class EnsembleDetector(Detector):
 class YoloDetectorV2(Detector):
     def __init__(self, yolo_path):
         self.model = YOLO(yolo_path)
-        self.input_size = 640  # Fixed input resolution
+        self.input_size = 1280  # Use 1280x1280 for both models
 
     def __call__(self, img):
         # img shape: (1, 3, height, width)
