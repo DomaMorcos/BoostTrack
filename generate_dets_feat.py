@@ -124,7 +124,7 @@ def main():
         if dets.shape[0] > 0:
             boxes = dets[:, :4]  # [x1, y1, x2, y2]
             scores = dets[:, 4]
-            keep = nms(boxes, scores, iou_threshold=0.5)  # Increased to retain more detections
+            keep = nms(boxes, scores, iou_threshold=0.6)  # Increased to retain more detections
             dets = dets[keep].numpy()
             print(f"Frame {frame_id}: Detections after NMS: {dets.shape[0]}")
 
@@ -143,7 +143,7 @@ def main():
                 dets = tracker.duo_confidence_boost(dets)
 
             # Apply detection threshold
-            dets = dets[dets[:, 4] >= GeneralSettings['det_thresh']]
+            dets = dets[dets[:, 45] >= GeneralSettings['det_thresh']]
             print(f"Frame {frame_id}: Detections after confidence boosting and thresholding: {dets.shape[0]}")
 
         # Visualize detections for the first 5 frames
