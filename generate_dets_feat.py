@@ -9,7 +9,7 @@ import dataset
 from default_settings import GeneralSettings, BoostTrackSettings, BoostTrackPlusPlusSettings
 from tracker.embedding import EmbeddingComputer
 from tracker.boost_track import BoostTrack
-from detectors import YoloDetector, EnsembleDetector
+from detectors import YoloDetectorV2, EnsembleDetectorV2  # Use the new classes
 
 def make_parser():
     parser = ArgumentParser("Generate Detections and ReID Features for AdapTrack with BoostTrack++ Processing")
@@ -35,7 +35,6 @@ def my_data_loader(main_path):
         rgb_means=(0.485, 0.456, 0.406),
         std=(0.229, 0.224, 0.225),
     )
-    target_size = 640  # Resize to 640x640 to match typical YOLO input resolution
     for idx, img_path in enumerate(img_paths, 1):
         np_img = cv2.imread(img_path)
         if np_img is None:
@@ -49,14 +48,10 @@ def my_data_loader(main_path):
             print(f"Error: Invalid image dimensions for {img_path}: height={height}, width={width}")
             yield idx, None, None, None
             continue
-        # Pre-resize the image to target_size x target_size
-        np_img_resized = cv2.resize(np_img, (target_size, target_size), interpolation=cv2.INTER_LINEAR)
-        print(f"Frame {idx}: Resized image shape: {np_img_resized.shape}")
-        # Apply ValTransform on the resized image
-        img, _ = preproc(np_img_resized, None, (target_size, target_size))
+        img, _ = preproc(np_img, None, (height, width))
         img = img.reshape(1, *img.shape)
         print(f"Frame {idx}: Input image shape to detector: {img.shape}")
-        yield idx, img, np_img, (height, width, idx, None, ["test"])  # Return original np_img for ReID
+        yield idx, img, np_img, (height, width, idx, None, ["test"])
 
 def main():
     args = make_parser().parse_args()
@@ -68,10 +63,10 @@ def main():
     GeneralSettings.values['max_age'] = args.frame_rate
     GeneralSettings.values['test_dataset'] = False  # Ensure OSNet is used
 
-    # Initialize detectors
-    model1 = YoloDetector(args.model1_path)
-    model2 = YoloDetector(args.model2_path)
-    det = EnsembleDetector(model1, model2, args.model1_weight, args.model2_weight, args.iou_thresh, args.conf_thresh)
+    # Initialize detectors using the new classes
+    model1 = YoloDetectorV2(args.model1_path)
+    model2 = YoloDetectorV2(args.model2_path)
+    det = EnsembleDetectorV2(model1, model2, args.model1_weight, args.model2_weight, args.iou_thresh, args.conf_thresh)
 
     # Initialize EmbeddingComputer for ReID features
     embedder = EmbeddingComputer(GeneralSettings['dataset'], False, True, reid_path=GeneralSettings['reid_path'])
@@ -99,10 +94,8 @@ def main():
             det_results[frame_id] = np.zeros((0, 5 + 256), dtype=np.float32)
             continue
 
-        # Rescale detections to original image size
-        scale = min(img.shape[2] / np_img.shape[0], img.shape[3] / np_img.shape[1])
+        # Rescale detections to original image size (already handled in YoloDetectorV2)
         pred = pred.cpu().numpy()
-        pred[:, :4] /= scale
 
         # Apply BoostTrack++'s confidence boosting and thresholding
         dets = tracker.process_detections(pred, img, np_img, tag)
