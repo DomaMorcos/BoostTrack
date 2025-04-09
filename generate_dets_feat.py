@@ -9,7 +9,7 @@ import dataset
 from default_settings import GeneralSettings, BoostTrackSettings, BoostTrackPlusPlusSettings
 from tracker.embedding import EmbeddingComputer
 from tracker.boost_track import BoostTrack
-from detectors import YoloDetectorV2, EnsembleDetectorV2  # Use the new classes
+from detectors import YoloDetectorV2, EnsembleDetectorV2
 
 def make_parser():
     parser = ArgumentParser("Generate Detections and ReID Features for AdapTrack with BoostTrack++ Processing")
@@ -49,7 +49,12 @@ def my_data_loader(main_path):
             yield idx, None, None, None
             continue
         img, _ = preproc(np_img, None, (height, width))
-        img = img.reshape(1, *img.shape)
+        # Convert to PyTorch tensor and reshape to (1, 3, height, width)
+        img = torch.from_numpy(img).float()  # Convert NumPy array to PyTorch tensor
+        img = img.reshape(1, *img.shape)  # (1, 3, height, width)
+        # Move to GPU if available
+        if torch.cuda.is_available():
+            img = img.cuda()
         print(f"Frame {idx}: Input image shape to detector: {img.shape}")
         yield idx, img, np_img, (height, width, idx, None, ["test"])
 
