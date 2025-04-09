@@ -103,10 +103,25 @@ def main():
             continue
 
         # Rescale detections to original image size (already handled in YoloDetectorV2)
-        pred = pred.cpu().numpy()
+        dets = pred.cpu().numpy()
 
-        # Apply BoostTrack++'s confidence boosting and thresholding
-        dets = tracker.process_detections(pred, img, np_img, tag)
+        # Manually apply confidence boosting (mimicking BoostTrack.process_detections)
+        if dets.shape[0] > 0:
+            # Apply DLO confidence boost if enabled
+            if BoostTrackSettings['use_dlo_boost']:
+                dets = tracker.dlo_confidence_boost(
+                    dets,
+                    BoostTrackPlusPlusSettings['use_rich_s'],
+                    BoostTrackPlusPlusSettings['use_sb'],
+                    BoostTrackPlusPlusSettings['use_vt']
+                )
+            # Apply DUO confidence boost if enabled
+            if BoostTrackSettings['use_duo_boost']:
+                dets = tracker.duo_confidence_boost(dets)
+
+            # Apply detection threshold
+            dets = dets[dets[:, 4] >= GeneralSettings['det_thresh']]
+
         if dets.shape[0] == 0:
             det_results[frame_id] = np.zeros((0, 5 + 256), dtype=np.float32)
             continue
