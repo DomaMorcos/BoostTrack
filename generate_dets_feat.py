@@ -143,7 +143,7 @@ def main():
                 dets = tracker.duo_confidence_boost(dets)
 
             # Apply detection threshold
-            dets = dets[dets[:, 45] >= GeneralSettings['det_thresh']]
+            dets = dets[dets[:, 4] >= GeneralSettings['det_thresh']]
             print(f"Frame {frame_id}: Detections after confidence boosting and thresholding: {dets.shape[0]}")
 
         # Visualize detections for the first 5 frames
