@@ -54,6 +54,7 @@ def main():
     GeneralSettings.values['use_embedding'] = True  # Enable ReID
     GeneralSettings.values['reid_path'] = args.reid_path
     GeneralSettings.values['max_age'] = args.frame_rate
+    GeneralSettings.values['test_dataset'] = False  # Ensure OSNet is used
 
     # Initialize detectors
     model1 = YoloDetector(args.model1_path)
@@ -68,7 +69,7 @@ def main():
     det_results = {}
     for frame_id, img, np_img, info in my_data_loader(args.dataset_path):
         if np_img is None:
-            det_results[frame_id] = np.zeros((0, 5 + 512), dtype=np.float32)  # Assuming feature_dim=512
+            det_results[frame_id] = np.zeros((0, 5 + 256), dtype=np.float32)  # OSNet embedding_dim=256
             continue
 
         print(f"Processing frame {frame_id}\r", end="")
@@ -83,7 +84,7 @@ def main():
         # Run detection
         pred = det(img)
         if pred is None:
-            det_results[frame_id] = np.zeros((0, 5 + 512), dtype=np.float32)
+            det_results[frame_id] = np.zeros((0, 5 + 256), dtype=np.float32)
             continue
 
         # Rescale detections to original image size
@@ -94,15 +95,16 @@ def main():
         # Apply BoostTrack++'s confidence boosting and thresholding
         dets = tracker.process_detections(pred, img, np_img, tag)
         if dets.shape[0] == 0:
-            det_results[frame_id] = np.zeros((0, 5 + 512), dtype=np.float32)
+            det_results[frame_id] = np.zeros((0, 5 + 256), dtype=np.float32)
             continue
 
         # Compute ReID features
-        dets_embs = np.zeros((dets.shape[0], 512), dtype=np.float32)  # Placeholder for features
+        dets_embs = np.zeros((dets.shape[0], 256), dtype=np.float32)  # OSNet embedding_dim=256
         if dets.size > 0:
             dets_embs = embedder.compute_embedding(np_img, dets[:, :4], tag)
+            print(f"Feature dimension for frame {frame_id}: {dets_embs.shape[1]}")  # Debug print
 
-        # Combine detections and features: [x1, y1, x2, y2, conf, feat_1, ..., feat_512]
+        # Combine detections and features: [x1, y1, x2, y2, conf, feat_1, ..., feat_256]
         dets_with_feats = np.concatenate((dets, dets_embs), axis=1)
         det_results[frame_id] = dets_with_feats
 
