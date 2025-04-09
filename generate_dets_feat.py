@@ -41,10 +41,17 @@ def my_data_loader(main_path):
             print(f"Warning: Failed to load {img_path}")
             yield idx, None, None, None
             continue
-        # Get size of image
+        # Debug: Check raw image dimensions
+        print(f"Frame {idx}: Raw image shape: {np_img.shape}")
         height, width, _ = np_img.shape
+        if height == 0 or width == 0:
+            print(f"Error: Invalid image dimensions for {img_path}: height={height}, width={width}")
+            yield idx, None, None, None
+            continue
         img, _ = preproc(np_img, None, (height, width))
-        yield idx, img.reshape(1, *img.shape), np_img, (height, width, idx, None, ["test"])
+        img = img.reshape(1, *img.shape)
+        print(f"Frame {idx}: Input image shape to detector: {img.shape}")
+        yield idx, img, np_img, (height, width, idx, None, ["test"])
 
 def main():
     args = make_parser().parse_args()
