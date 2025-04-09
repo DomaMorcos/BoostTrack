@@ -24,8 +24,8 @@ def make_parser():
     parser.add_argument("--model1_weight", type=float, default=0.6, help="Weight for first model in ensemble (yolo12l)")
     parser.add_argument("--model2_path", type=str, required=True, help="Path to second YOLO model weights (yolo12x)")
     parser.add_argument("--model2_weight", type=float, default=0.4, help="Weight for second model in ensemble (yolo12x)")
-    parser.add_argument("--iou_thresh", type=float, default=0.6, help="IoU threshold for WBF")
-    parser.add_argument("--conf_thresh", type=float, default=0.1, help="Confidence threshold for detections post-WBF (lowered to retain more detections)")
+    parser.add_argument("--iou_thresh", type=float, default=0.5, help="IoU threshold for WBF (lowered to retain more detections)")
+    parser.add_argument("--conf_thresh", type=float, default=0.3, help="Confidence threshold for detections post-WBF (set to 0.3 as requested)")
     parser.add_argument("--output_pickle", type=str, default="dets_feat.pickle", help="Name of the output pickle file")
     return parser
 
@@ -71,10 +71,10 @@ def main():
     GeneralSettings.values['reid_path'] = args.reid_path
     GeneralSettings.values['max_age'] = args.frame_rate
     GeneralSettings.values['test_dataset'] = False  # Ensure OSNet is used
-    GeneralSettings.values['det_thresh'] = 0.05  # Further lowered for better recall
+    GeneralSettings.values['det_thresh'] = 0.01  # Further lowered for better recall
 
     # Tune confidence boosting
-    BoostTrackSettings.values['dlo_boost_coef'] = 0.5  # Adjusted to potentially match run_with_ensembler.py
+    BoostTrackSettings.values['dlo_boost_coef'] = 0.7  # Increased to make boosting more aggressive
 
     # Initialize detectors with native resolutions
     model1 = YoloDetectorV2(args.model1_path, input_size=1280)  # yolo12l at 1280x1280
@@ -124,7 +124,7 @@ def main():
         if dets.shape[0] > 0:
             boxes = dets[:, :4]  # [x1, y1, x2, y2]
             scores = dets[:, 4]
-            keep = nms(boxes, scores, iou_threshold=0.3)  # Lowered IoU threshold to retain more detections
+            keep = nms(boxes, scores, iou_threshold=0.5)  # Increased to retain more detections
             dets = dets[keep].numpy()
             print(f"Frame {frame_id}: Detections after NMS: {dets.shape[0]}")
 
@@ -146,6 +146,17 @@ def main():
             dets = dets[dets[:, 4] >= GeneralSettings['det_thresh']]
             print(f"Frame {frame_id}: Detections after confidence boosting and thresholding: {dets.shape[0]}")
 
+        # Visualize detections for the first 5 frames
+        if frame_id <= 5 and dets.shape[0] > 0:
+            vis_img = np_img.copy()
+            for det in dets:
+                x1, y1, x2, y2, conf = det[:5]
+                x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+                cv2.rectangle(vis_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv2.putText(vis_img, f"{conf:.2f}", (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            cv2.imwrite(f"frame_{frame_id}_detections.jpg", vis_img)
+            print(f"Saved visualization for frame {frame_id}")
+
         if dets.shape[0] == 0:
             det_results[frame_id] = np.zeros((0, 5 + 768), dtype=np.float32)
             continue
@@ -156,7 +167,16 @@ def main():
             dets_embs = embedder.compute_embedding(np_img, dets[:, :4], tag)
             print(f"Feature dimension for frame {frame_id}: {dets_embs.shape[1]}")  # Debug print
 
-        # Combine detections and features: [x1, y1, x2, y2, conf, feat_1, ..., feat_768]
+        # If feature dimension is 256, adjust the storage
+        if dets_embs.shape[1] != 768:
+            print(f"Warning: Feature dimension is {dets_embs.shape[1]}, expected 768. Adjusting storage.")
+            det_results[frame_id] = np.zeros((0, 5 + dets_embs.shape[1]), dtype=np.float32)
+            if dets.shape[0] == 0:
+                continue
+            dets_embs = np.zeros((dets.shape[0], dets_embs.shape[1]), dtype=np.float32)
+            dets_embs = embedder.compute_embedding(np_img, dets[:, :4], tag)
+
+        # Combine detections and features
         dets_with_feats = np.concatenate((dets, dets_embs), axis=1)
         det_results[frame_id] = dets_with_feats
 
