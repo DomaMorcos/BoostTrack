@@ -48,15 +48,18 @@ def my_data_loader(main_path):
             print(f"Error: Invalid image dimensions for {img_path}: height={height}, width={width}")
             yield idx, None, None, None
             continue
-        img, _ = preproc(np_img, None, (height, width))
+        # Scale image to [0, 1] for YOLO
+        img_yolo = np_img / 255.0
         # Convert to PyTorch tensor and reshape to (1, 3, height, width)
-        img = torch.from_numpy(img).float()  # Convert NumPy array to PyTorch tensor
-        img = img.reshape(1, *img.shape)  # (1, 3, height, width)
+        img_yolo = torch.from_numpy(img_yolo).float().permute(2, 0, 1)  # (3, height, width)
+        img_yolo = img_yolo.reshape(1, *img_yolo.shape)  # (1, 3, height, width)
         # Move to GPU if available
         if torch.cuda.is_available():
-            img = img.cuda()
-        print(f"Frame {idx}: Input image shape to detector: {img.shape}")
-        yield idx, img, np_img, (height, width, idx, None, ["test"])
+            img_yolo = img_yolo.cuda()
+        print(f"Frame {idx}: Input image shape to detector: {img_yolo.shape}")
+        # For ReID, apply ValTransform (expects input in [0, 1])
+        img_reid, _ = preproc(np_img / 255.0, None, (height, width))
+        yield idx, img_yolo, np_img, (height, width, idx, None, ["test"])
 
 def main():
     args = make_parser().parse_args()
