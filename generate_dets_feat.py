@@ -24,7 +24,7 @@ def make_parser():
     parser.add_argument("--model1_weight", type=float, default=0.6, help="Weight for first model in ensemble (yolo12l)")
     parser.add_argument("--model2_path", type=str, required=True, help="Path to second YOLO model weights (yolo12x)")
     parser.add_argument("--model2_weight", type=float, default=0.4, help="Weight for second model in ensemble (yolo12x)")
-    parser.add_argument("--iou_thresh", type=float, default=0.5, help="IoU threshold for WBF (lowered to retain more detections)")
+    parser.add_argument("--iou_thresh", type=float, default=0.6, help="IoU threshold for WBF (lowered to retain more detections)")
     parser.add_argument("--conf_thresh", type=float, default=0.3, help="Confidence threshold for detections post-WBF (set to 0.3 as requested)")
     parser.add_argument("--output_pickle", type=str, default="dets_feat.pickle", help="Name of the output pickle file")
     return parser
@@ -124,7 +124,7 @@ def main():
         if dets.shape[0] > 0:
             boxes = dets[:, :4]  # [x1, y1, x2, y2]
             scores = dets[:, 4]
-            keep = nms(boxes, scores, iou_threshold=0.8)  # Increased to retain more detections
+            keep = nms(boxes, scores, iou_threshold=0.85)  # Increased to retain more detections
             dets = dets[keep].numpy()
             print(f"Frame {frame_id}: Detections after NMS: {dets.shape[0]}")
 
@@ -143,7 +143,7 @@ def main():
                 dets = tracker.duo_confidence_boost(dets)
 
             # Apply detection threshold
-            dets = dets[dets[:, 4] >= GeneralSettings['det_thresh']]
+            dets = dets[dets[:, 2] >= GeneralSettings['det_thresh']]
             print(f"Frame {frame_id}: Detections after confidence boosting and thresholding: {dets.shape[0]}")
 
         # Visualize detections for the first 5 frames
