@@ -5,8 +5,7 @@ import time
 import dataset
 import utils
 from args import make_parser
-from default_settings import GeneralSettings, get_detector_path_and_im_size, BoostTrackPlusPlusSettings, BoostTrackSettings
-from external.adaptors import detector
+from default_settings import GeneralSettings, BoostTrackPlusPlusSettings, BoostTrackSettings
 from tracker.GBI import GBInterpolation
 from tracker.boost_track import BoostTrack
 from ultralytics import YOLO
@@ -15,12 +14,6 @@ import numpy as np
 import torch
 
 from detectors import *
-
-"""
-Script modified from Deep OC-SORT: 
-https://github.com/GerardMaggiolino/Deep-OC-SORT
-"""
-
 
 def get_main_args():
     parser = make_parser()
@@ -40,10 +33,11 @@ def get_main_args():
     parser.add_argument("--model1_weight", type=float, default=0.5)
     parser.add_argument("--model2_path", type=str)
     parser.add_argument("--model2_weight", type=float, default=0.5)
-    parser.add_argument("--reid_path", type=str)
-    parser.add_argument("--reid_path2", type=str, default=None, help="path to second reid weights (optional)")
-    parser.add_argument("--reid_weight1", type=float, default=0.5, help="weight of first reid model")
-    parser.add_argument("--reid_weight2", type=float, default=0.5, help="weight of second reid model")
+    parser.add_argument("--reid_model_type", type=str, default="sbs_s50", choices=["osnet", "sbs_s50", "ensemble"], help="Type of ReID model: osnet, sbs_s50, or ensemble")
+    parser.add_argument("--reid_path_osnet", type=str, default=None, help="Path to OSNet ReID model weights")
+    parser.add_argument("--reid_path_sbs_s50", type=str, default=None, help="Path to SBS_S50 ReID model weights")
+    parser.add_argument("--reid_weight_osnet", type=float, default=0.5, help="Weight for OSNet in ensemble")
+    parser.add_argument("--reid_weight_sbs_s50", type=float, default=0.5, help="Weight for SBS_S50 in ensemble")
     parser.add_argument("--frame_rate", type=int, default=25)
 
     args = parser.parse_args()
@@ -56,52 +50,44 @@ def get_main_args():
         args.result_folder = args.result_folder.replace("-val", "-test")
     return args
 
-
 def my_data_loader(main_path):
     img_pathes = [os.path.join(main_path, img) for img in os.listdir(main_path)]
     img_pathes = sorted(img_pathes)
-    preproc=dataset.ValTransform(
-            rgb_means=(0.485, 0.456, 0.406),
-            std=(0.229, 0.224, 0.225),
-        )
+    preproc = dataset.ValTransform(
+        rgb_means=(0.485, 0.456, 0.406),
+        std=(0.229, 0.224, 0.225),
+    )
     for idx, img_path in enumerate(img_pathes[:], 1):
         np_img = cv2.imread(img_path)
-        # get size of image
         height, width, _ = np_img.shape
-        img, target  = preproc(np_img, None, (height, width))
+        img, target = preproc(np_img, None, (height, width))
         yield ((img.reshape(1, *img.shape), np_img), target, (height, width, torch.tensor(idx), None, ["test"]), None)
 
-
 def main():
-    # Set dataset and detector
     args = get_main_args()
     GeneralSettings.values['dataset'] = args.dataset
     GeneralSettings.values['use_embedding'] = not args.no_reid
     GeneralSettings.values['use_ecc'] = not args.no_cmc
     GeneralSettings.values['test_dataset'] = args.test_dataset
-    GeneralSettings.values['reid_path'] = args.reid_path
     GeneralSettings.values['max_age'] = args.frame_rate
 
     BoostTrackSettings.values['s_sim_corr'] = args.s_sim_corr
-
     BoostTrackPlusPlusSettings.values['use_rich_s'] = not args.btpp_arg_iou_boost
     BoostTrackPlusPlusSettings.values['use_sb'] = not args.btpp_arg_no_sb
     BoostTrackPlusPlusSettings.values['use_vt'] = not args.btpp_arg_no_vt
-
 
     tracker = None
     results = {}
     frame_count = 0
     total_time = 0
 
-    model1 = YoloDetector(args.model1_path)  # YOLOv12l
-    model2 = YoloDetector(args.model2_path)  # YOLOv9e
+    model1 = YoloDetector(args.model1_path)
+    model2 = YoloDetector(args.model2_path)
     det = EnsembleDetector(model1, model2, args.model1_weight, args.model2_weight)
-    for (img, np_img), _ , info, _ in my_data_loader(args.dataset_path):
+    for (img, np_img), _, info, _ in my_data_loader(args.dataset_path):
         frame_id = info[2].item()
         video_name = info[4][0].split("/")[0]
 
-    
         tag = f"{video_name}:{frame_id}"
         if video_name not in results:
             results[video_name] = []
@@ -113,17 +99,23 @@ def main():
             if tracker is not None:
                 tracker.dump_cache()
 
-            tracker = BoostTrack(video_name=video_name)
+            tracker = BoostTrack(
+                video_name=video_name,
+                reid_model_type=args.reid_model_type,
+                reid_path_osnet=args.reid_path_osnet,
+                reid_path_sbs_s50=args.reid_path_sbs_s50,
+                reid_weight_osnet=args.reid_weight_osnet,
+                reid_weight_sbs_s50=args.reid_weight_sbs_s50
+            )
 
         pred = det(np_img)
         start_time = time.time()
 
         if pred is None:
             continue
-        # Nx5 of (x1, y1, x2, y2, ID)
         targets = tracker.update(pred, img, np_img, tag)
         tlwhs, ids, confs = utils.filter_targets(targets, GeneralSettings['aspect_ratio_thresh'], GeneralSettings['min_box_area'])
-        print(f"{len(ids)} ids deteted")
+        print(f"{len(ids)} ids detected")
         total_time += time.time() - start_time
         frame_count += 1
 
@@ -131,10 +123,7 @@ def main():
 
     print(f"Time spent: {total_time:.3f}, FPS {frame_count / (total_time + 1e-9):.2f}")
     print(total_time)
-    # Save detector results
-    # det.dump_cache()
     tracker.dump_cache()
-    # Save for all sequences
     folder = os.path.join(args.result_folder, args.exp_name, "data")
     os.makedirs(folder, exist_ok=True)
     for name, res in results.items():
@@ -149,7 +138,7 @@ def main():
             shutil.rmtree(post_folder)
         shutil.copytree(pre_folder, post_folder)
         post_folder_data = os.path.join(post_folder, "data")
-        interval = 1000  # i.e. no max interval
+        interval = 1000
         utils.dti(post_folder_data, post_folder_data, n_dti=interval, n_min=25)
 
         print(f"Linear interpolation post-processing applied, saved to {post_folder_data}.")
@@ -169,7 +158,6 @@ def main():
                 interval=interval
             )
         print(f"Gradient boosting interpolation post-processing applied, saved to {post_folder_gbi}.")
-
 
 if __name__ == "__main__":
     main()

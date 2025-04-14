@@ -21,11 +21,9 @@ class OSNetReID(nn.Module):
             pretrained=pretrained
         )
         self.model.classifier = nn.Identity()
-
         for name, param in self.model.named_parameters():
             if 'conv4' not in name:
                 param.requires_grad = False
-
         self.fc = nn.Linear(512, embedding_dim)
 
     def forward(self, x):
@@ -34,28 +32,33 @@ class OSNetReID(nn.Module):
         return nn.functional.normalize(x, p=2, dim=1)
 
 class EnsembleOSNetReID(nn.Module):
-    def __init__(self, model1_path, model2_path, weight1=0.5, weight2=0.5, embedding_dim=256):
+    def __init__(self, model_osnet, model_sbs_s50, weight_osnet=0.5, weight_sbs_s50=0.5):
         super(EnsembleOSNetReID, self).__init__()
-        self.model1 = OSNetReID()
-        self.model2 = OSNetReID()  
-        self.weight1 = weight1
-        self.weight2 = weight2
-        
-        # Load weights if provided
-        if model1_path:
-            self.model1.load_state_dict(torch.load(model1_path))
-        if model2_path:
-            self.model2.load_state_dict(torch.load(model2_path))
+        self.model_osnet = model_osnet
+        self.model_sbs_s50 = model_sbs_s50
+        self.weight_osnet = weight_osnet
+        self.weight_sbs_s50 = weight_sbs_s50
 
     def forward(self, x):
-        emb1 = self.model1(x)
-        emb2 = self.model2(x)
-        # Weighted ensemble
-        return nn.functional.normalize(self.weight1 * emb1 + self.weight2 * emb2, p=2, dim=1)
+        emb_osnet = self.model_osnet(x) if self.model_osnet else torch.zeros_like(x)
+        emb_sbs_s50 = self.model_sbs_s50(x) if self.model_sbs_s50 else torch.zeros_like(x)
+        return nn.functional.normalize(
+            self.weight_osnet * emb_osnet + self.weight_sbs_s50 * emb_sbs_s50, p=2, dim=1
+        )
 
 class EmbeddingComputer:
-    def __init__(self, dataset, test_dataset, grid_off, max_batch=1024, 
-                 reid_path=None, reid_path2=None, reid_weight1=0.5, reid_weight2=0.5):
+    def __init__(
+        self,
+        dataset,
+        test_dataset,
+        grid_off,
+        max_batch=1024,
+        reid_model_type="osnet",
+        reid_path_osnet=None,
+        reid_path_sbs_s50=None,
+        reid_weight_osnet=0.5,
+        reid_weight_sbs_s50=0.5
+    ):
         self.model = None
         self.dataset = dataset
         self.test_dataset = test_dataset
@@ -66,13 +69,28 @@ class EmbeddingComputer:
         self.cache_name = ""
         self.grid_off = grid_off
         self.max_batch = max_batch
-        self.reid_path = reid_path
-        self.reid_path2 = reid_path2
-        self.reid_weight1 = reid_weight1
-        self.reid_weight2 = reid_weight2
-
-        # Only used for the general ReID model (not FastReID)
+        self.reid_model_type = reid_model_type.lower()
+        self.reid_path_osnet = reid_path_osnet
+        self.reid_path_sbs_s50 = reid_path_sbs_s50
+        self.reid_weight_osnet = reid_weight_osnet
+        self.reid_weight_sbs_s50 = reid_weight_sbs_s50
         self.normalize = False
+
+        if self.reid_model_type not in ["osnet", "sbs_s50", "ensemble"]:
+            raise ValueError("reid_model_type must be 'osnet', 'sbs_s50', or 'ensemble'")
+        if self.reid_model_type == "osnet" and self.reid_path_osnet and not os.path.exists(self.reid_path_osnet):
+            raise FileNotFoundError(f"OSNet model path {self.reid_path_osnet} does not exist")
+        if self.reid_model_type == "sbs_s50" and self.reid_path_sbs_s50 and not os.path.exists(self.reid_path_sbs_s50):
+            raise FileNotFoundError(f"SBS_S50 model path {self.reid_path_sbs_s50} does not exist")
+        if self.reid_model_type == "ensemble":
+            if self.reid_path_osnet and not os.path.exists(self.reid_path_osnet):
+                raise FileNotFoundError(f"OSNet model path {self.reid_path_osnet} does not exist")
+            if self.reid_path_sbs_s50 and not os.path.exists(self.reid_path_sbs_s50):
+                raise FileNotFoundError(f"SBS_S50 model path {self.reid_path_sbs_s50} does not exist")
+            if not (0 <= self.reid_weight_osnet <= 1 and 0 <= self.reid_weight_sbs_s50 <= 1):
+                raise ValueError("Model weights must be between 0 and 1")
+            if abs(self.reid_weight_osnet + self.reid_weight_sbs_s50 - 1.0) > 1e-6:
+                raise ValueError("Sum of model weights must equal 1")
 
     def load_cache(self, path):
         self.cache_name = path
@@ -108,13 +126,13 @@ class EmbeddingComputer:
         patches = []
         for ix, patch_coords in enumerate(split_boxes):
             if isinstance(image, np.ndarray):
-                im1 = image[patch_coords[1] : patch_coords[3], patch_coords[0] : patch_coords[2], :]
+                im1 = image[patch_coords[1]:patch_coords[3], patch_coords[0]:patch_coords[2], :]
                 if viz:
                     dirs = "./viz/{}/{}".format(tag.split(":")[0], tag.split(":")[1])
                     Path(dirs).mkdir(parents=True, exist_ok=True)
                     cv2.imwrite(
                         os.path.join(dirs, "{}_{}.png".format(idx, ix)),
-                        im1.squeeze(0).permute(1, 2, 0).detach().cpu().numpy() * 255,
+                        im1,
                     )
                 patch = cv2.cvtColor(im1, cv2.COLOR_BGR2RGB)
                 patch = cv2.resize(patch, self.crop_size, interpolation=cv2.INTER_LINEAR)
@@ -122,8 +140,8 @@ class EmbeddingComputer:
                 patch = patch.unsqueeze(0)
                 patches.append(patch)
             else:
-                im1 = image[:, :, patch_coords[1] : patch_coords[3], patch_coords[0] : patch_coords[2]]
-                patch = torchvision.transforms.functional.resize(im1, (256, 128))
+                im1 = image[:, :, patch_coords[1]:patch_coords[3], patch_coords[0]:patch_coords[2]]
+                patch = torchvision.transforms.functional.resize(im1, self.crop_size)
                 patches.append(patch)
 
         return torch.cat(patches, dim=0)
@@ -154,7 +172,7 @@ class EmbeddingComputer:
             results[:, 3] = results[:, 3].clip(0, h)
 
             for p in results:
-                crop = img[p[1] : p[3], p[0] : p[2]]
+                crop = img[p[1]:p[3], p[0]:p[2]]
                 crop = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
                 crop = cv2.resize(crop, self.crop_size, interpolation=cv2.INTER_LINEAR).astype(np.float32)
                 if self.normalize:
@@ -172,7 +190,7 @@ class EmbeddingComputer:
 
         embs = []
         for idx in range(0, len(crops), self.max_batch):
-            batch_crops = crops[idx : idx + self.max_batch]
+            batch_crops = crops[idx:idx + self.max_batch]
             batch_crops = batch_crops.cuda()
             with torch.no_grad():
                 batch_embs = self.model(batch_crops)
@@ -190,19 +208,21 @@ class EmbeddingComputer:
     def initialize_model(self):
         if self.dataset == "mot17":
             if self.test_dataset:
-                path = "external/weights/mot17_sbs_S50.pth"
+                path = self.reid_path_sbs_s50 or "external/weights/mot17_sbs_S50.pth"
             else:
                 return self._get_general_model()
         elif self.dataset == "mot20":
             if self.test_dataset:
-                path = "external/weights/mot20_sbs_S50.pth"
+                path = self.reid_path_sbs_s50 or "external/weights/mot20_sbs_S50.pth"
             else:
                 return self._get_general_model()
         elif self.dataset == "dance":
-            path = "external/weights/dance_sbs_S50.pth"
+            path = self.reid_path_sbs_s50 or "external/weights/dance_sbs_S50.pth"
         else:
-            # return self._get_general_model()
-            path = self.reid_path
+            if self.reid_model_type == "sbs_s50" and self.reid_path_sbs_s50:
+                path = self.reid_path_sbs_s50
+            else:
+                return self._get_general_model()
 
         model = FastReID(path)
         model.eval()
@@ -211,24 +231,38 @@ class EmbeddingComputer:
         self.model = model
 
     def _get_general_model(self):
-        if self.reid_path2:  # If second ReID path is provided, use ensemble
-            model = EnsembleOSNetReID(
-                self.reid_path,
-                self.reid_path2,
-                self.reid_weight1,
-                self.reid_weight2,
-                embedding_dim=256
-            )
-        else:  # Use single model
+        if self.reid_model_type == "osnet":
             model = OSNetReID(embedding_dim=256)
-            if self.reid_path:
-                model.load_state_dict(torch.load(self.reid_path))
+            if self.reid_path_osnet:
+                model.load_state_dict(torch.load(self.reid_path_osnet))
+        elif self.reid_model_type == "sbs_s50":
+            if not self.reid_path_sbs_s50:
+                raise ValueError("SBS_S50 model path must be provided when reid_model_type is 'sbs_s50'")
+            model = FastReID(self.reid_path_sbs_s50)
+            model.half()
+        elif self.reid_model_type == "ensemble":
+            model_osnet = None
+            model_sbs_s50 = None
+            if self.reid_path_osnet:
+                model_osnet = OSNetReID(embedding_dim=256)
+                model_osnet.load_state_dict(torch.load(self.reid_path_osnet))
+            if self.reid_path_sbs_s50:
+                model_sbs_s50 = FastReID(self.reid_path_sbs_s50)
+                model_sbs_s50.half()
+            model = EnsembleOSNetReID(
+                model_osnet,
+                model_sbs_s50,
+                self.reid_weight_osnet,
+                self.reid_weight_sbs_s50
+            )
+        else:
+            raise ValueError("Invalid reid_model_type")
 
         model.eval()
         model.cuda()
         self.model = model
-        self.crop_size = (128, 256)
-        self.normalize = True
+        self.crop_size = (128, 256) if self.reid_model_type in ["osnet", "ensemble"] else (128, 384)
+        self.normalize = self.reid_model_type in ["osnet", "ensemble"]
 
     def dump_cache(self):
         if self.cache_name:
