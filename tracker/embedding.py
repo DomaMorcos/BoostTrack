@@ -32,16 +32,21 @@ class OSNetReID(nn.Module):
         return nn.functional.normalize(x, p=2, dim=1)
 
 class EnsembleOSNetReID(nn.Module):
-    def __init__(self, model_osnet, model_sbs_s50, weight_osnet=0.5, weight_sbs_s50=0.5):
+    def __init__(self, model_osnet, model_sbs_s50, weight_osnet=0.5, weight_sbs_s50=0.5, embedding_dim=256):
         super(EnsembleOSNetReID, self).__init__()
         self.model_osnet = model_osnet
         self.model_sbs_s50 = model_sbs_s50
         self.weight_osnet = weight_osnet
         self.weight_sbs_s50 = weight_sbs_s50
+        # Add projection layer for SBS_S50 to match OSNet's embedding dimension
+        self.sbs_s50_projection = nn.Linear(2048, embedding_dim) if model_sbs_s50 else None
 
     def forward(self, x):
-        emb_osnet = self.model_osnet(x) if self.model_osnet else torch.zeros_like(x)
-        emb_sbs_s50 = self.model_sbs_s50(x) if self.model_sbs_s50 else torch.zeros_like(x)
+        emb_osnet = self.model_osnet(x) if self.model_osnet else torch.zeros(x.size(0), 256, device=x.device)
+        emb_sbs_s50 = self.model_sbs_s50(x) if self.model_sbs_s50 else torch.zeros(x.size(0), 2048, device=x.device)
+        if self.sbs_s50_projection and emb_sbs_s50.size(1) == 2048:
+            emb_sbs_s50 = self.sbs_s50_projection(emb_sbs_s50)
+            emb_sbs_s50 = nn.functional.normalize(emb_sbs_s50, p=2, dim=1)
         return nn.functional.normalize(
             self.weight_osnet * emb_osnet + self.weight_sbs_s50 * emb_sbs_s50, p=2, dim=1
         )
@@ -253,7 +258,8 @@ class EmbeddingComputer:
                 model_osnet,
                 model_sbs_s50,
                 self.reid_weight_osnet,
-                self.reid_weight_sbs_s50
+                self.reid_weight_sbs_s50,
+                embedding_dim=256
             )
         else:
             raise ValueError("Invalid reid_model_type")
