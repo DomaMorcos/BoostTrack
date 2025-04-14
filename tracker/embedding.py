@@ -42,9 +42,11 @@ class EnsembleOSNetReID(nn.Module):
         self.sbs_s50_projection = nn.Linear(2048, embedding_dim) if model_sbs_s50 else None
 
     def forward(self, x):
-        emb_osnet = self.model_osnet(x) if self.model_osnet else torch.zeros(x.size(0), 256, device=x.device)
-        emb_sbs_s50 = self.model_sbs_s50(x) if self.model_sbs_s50 else torch.zeros(x.size(0), 2048, device=x.device)
+        emb_osnet = self.model_osnet(x) if self.model_osnet else torch.zeros(x.size(0), 256, device=x.device, dtype=torch.float32)
+        emb_sbs_s50 = self.model_sbs_s50(x) if self.model_sbs_s50 else torch.zeros(x.size(0), 2048, device=x.device, dtype=torch.float32)
         if self.sbs_s50_projection and emb_sbs_s50.size(1) == 2048:
+            # Cast to float32 to match projection layer's dtype
+            emb_sbs_s50 = emb_sbs_s50.float()
             emb_sbs_s50 = self.sbs_s50_projection(emb_sbs_s50)
             emb_sbs_s50 = nn.functional.normalize(emb_sbs_s50, p=2, dim=1)
         return nn.functional.normalize(
